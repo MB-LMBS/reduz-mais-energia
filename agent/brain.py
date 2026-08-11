@@ -9,6 +9,8 @@ y genera respuestas usando la API de Anthropic Claude.
 import os
 import yaml
 import logging
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from anthropic import AsyncAnthropic
 from dotenv import load_dotenv
 
@@ -53,10 +55,32 @@ def cargar_config_prompts() -> dict:
         return {}
 
 
+DIAS_SEMANA = ["segunda-feira", "terça-feira", "quarta-feira", "quinta-feira",
+               "sexta-feira", "sábado", "domingo"]
+
+
+def obtener_contexto_temporal() -> str:
+    """
+    Genera un bloque con la fecha/hora actual (hora de Portugal) para que el
+    modelo sepa con certeza si está dentro o fuera del horario de atención,
+    en vez de adivinarlo.
+    """
+    ahora = datetime.now(ZoneInfo("Europe/Lisbon"))
+    dia_semana = DIAS_SEMANA[ahora.weekday()]
+    dentro_horario = ahora.weekday() < 5 and 9 <= ahora.hour < 18
+    estado = "DENTRO do horário de atendimento" if dentro_horario else "FORA do horário de atendimento"
+    return (
+        f"\n\n## Data e hora atuais\n"
+        f"Agora é {dia_semana}, {ahora.strftime('%d/%m/%Y')}, {ahora.strftime('%H:%M')} "
+        f"(hora de Portugal). Estamos {estado}."
+    )
+
+
 def cargar_system_prompt() -> str:
-    """Lee el system prompt desde config/prompts.yaml."""
+    """Lee el system prompt desde config/prompts.yaml, con la fecha/hora actual añadida."""
     config = cargar_config_prompts()
-    return config.get("system_prompt", "Eres un asistente útil. Responde en español.")
+    base = config.get("system_prompt", "Eres un asistente útil. Responde en español.")
+    return base + obtener_contexto_temporal()
 
 
 def obtener_mensaje_error() -> str:
