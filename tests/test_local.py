@@ -65,8 +65,10 @@ async def main():
 
         # Generar respuesta
         print("\nAgente: ", end="", flush=True)
-        respuesta = await generar_respuesta(mensaje, historial)
+        respuesta, escalar = await generar_respuesta(mensaje, historial)
         print(respuesta)
+        if escalar:
+            print("[Simulação: conversa seria encaminhada para o consultor aqui]")
         print()
 
         # Guardar mensaje del usuario y respuesta del agente

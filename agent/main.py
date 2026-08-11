@@ -14,7 +14,7 @@ from fastapi.responses import PlainTextResponse
 from dotenv import load_dotenv
 
 from agent.brain import generar_respuesta
-from agent.memory import inicializar_db, guardar_mensaje, obtener_historial, obtener_modo
+from agent.memory import inicializar_db, guardar_mensaje, obtener_historial, obtener_modo, establecer_modo
 from agent.providers import obtener_proveedor
 from agent.admin import router as admin_router
 
@@ -29,6 +29,27 @@ logger = logging.getLogger("agentkit")
 # Proveedor de WhatsApp (se configura en .env con WHATSAPP_PROVIDER)
 proveedor = obtener_proveedor()
 PORT = int(os.getenv("PORT", 8000))
+
+# Número personal a donde se reenvía la conversación cuando el cliente pide
+# hablar con un consultor humano
+NUMERO_CONSULTOR = os.getenv("NUMERO_CONSULTOR", "")
+
+
+async def notificar_consultor(telefono_cliente: str, historial: list[dict], mensaje_actual: str):
+    """Envía la conversación completa al WhatsApp personal del consultor."""
+    if not NUMERO_CONSULTOR:
+        logger.warning("NUMERO_CONSULTOR no configurado — no se puede notificar")
+        return
+
+    lineas = [f"🔔 *Pedido de consultor* — {telefono_cliente}", ""]
+    for msg in historial:
+        etiqueta = "Cliente" if msg["role"] == "user" else "Reduz+"
+        lineas.append(f"*{etiqueta}:* {msg['content']}")
+    lineas.append(f"*Cliente:* {mensaje_actual}")
+    lineas.append("")
+    lineas.append(f"Responde diretamente ao cliente em: /admin/conversa/{telefono_cliente}")
+
+    await proveedor.enviar_mensaje(NUMERO_CONSULTOR, "\n".join(lineas))
 
 
 @asynccontextmanager
@@ -95,7 +116,7 @@ async def webhook_handler(request: Request):
             historial = await obtener_historial(msg.telefono)
 
             # Generar respuesta con Claude
-            respuesta = await generar_respuesta(msg.texto, historial)
+            respuesta, escalar = await generar_respuesta(msg.texto, historial)
 
             # Guardar mensaje del usuario Y respuesta del agente en memoria
             await guardar_mensaje(msg.telefono, "user", msg.texto)
@@ -105,6 +126,12 @@ async def webhook_handler(request: Request):
             await proveedor.enviar_mensaje(msg.telefono, respuesta)
 
             logger.info(f"Respuesta a {msg.telefono}: {respuesta}")
+
+            # Si el cliente pidió/aceptó hablar con un consultor, reenviamos
+            # la conversación completa y pausamos el bot en esa conversación
+            if escalar:
+                await notificar_consultor(msg.telefono, historial, msg.texto)
+                await establecer_modo(msg.telefono, "manual")
 
         return {"status": "ok"}
 
