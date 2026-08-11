@@ -10,7 +10,7 @@ import os
 from datetime import datetime
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import String, Text, DateTime, select, Integer
+from sqlalchemy import String, Text, DateTime, select, Integer, func
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -36,9 +36,17 @@ class Mensaje(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     telefono: Mapped[str] = mapped_column(String(50), index=True)
-    role: Mapped[str] = mapped_column(String(20))  # "user" o "assistant"
+    role: Mapped[str] = mapped_column(String(20))  # "user", "assistant" o "humano"
     content: Mapped[str] = mapped_column(Text)
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class Conversacion(Base):
+    """Estado de cada conversación: si responde el bot o un humano."""
+    __tablename__ = "conversaciones"
+
+    telefono: Mapped[str] = mapped_column(String(50), primary_key=True)
+    modo: Mapped[str] = mapped_column(String(10), default="bot")  # "bot" o "manual"
 
 
 async def inicializar_db():
@@ -88,6 +96,63 @@ async def obtener_historial(telefono: str, limite: int = 20) -> list[dict]:
             {"role": msg.role, "content": msg.content}
             for msg in mensajes
         ]
+
+
+async def obtener_modo(telefono: str) -> str:
+    """Retorna el modo actual de la conversación: 'bot' (default) o 'manual'."""
+    async with async_session() as session:
+        query = select(Conversacion).where(Conversacion.telefono == telefono)
+        result = await session.execute(query)
+        conversacion = result.scalar_one_or_none()
+        return conversacion.modo if conversacion else "bot"
+
+
+async def establecer_modo(telefono: str, modo: str):
+    """Cambia el modo de una conversación a 'bot' o 'manual'."""
+    async with async_session() as session:
+        query = select(Conversacion).where(Conversacion.telefono == telefono)
+        result = await session.execute(query)
+        conversacion = result.scalar_one_or_none()
+        if conversacion:
+            conversacion.modo = modo
+        else:
+            session.add(Conversacion(telefono=telefono, modo=modo))
+        await session.commit()
+
+
+async def listar_conversaciones() -> list[dict]:
+    """
+    Lista todas las conversaciones con su último mensaje y modo actual,
+    ordenadas por actividad más reciente primero.
+    """
+    async with async_session() as session:
+        subquery = (
+            select(
+                Mensaje.telefono,
+                func.max(Mensaje.timestamp).label("ultimo_timestamp"),
+            )
+            .group_by(Mensaje.telefono)
+            .subquery()
+        )
+        query = select(Mensaje, subquery.c.ultimo_timestamp).join(
+            subquery,
+            (Mensaje.telefono == subquery.c.telefono)
+            & (Mensaje.timestamp == subquery.c.ultimo_timestamp),
+        ).order_by(subquery.c.ultimo_timestamp.desc())
+        result = await session.execute(query)
+        filas = result.all()
+
+        conversaciones = []
+        for msg, _ in filas:
+            modo = await obtener_modo(msg.telefono)
+            conversaciones.append({
+                "telefono": msg.telefono,
+                "ultimo_mensaje": msg.content,
+                "ultimo_role": msg.role,
+                "timestamp": msg.timestamp,
+                "modo": modo,
+            })
+        return conversaciones
 
 
 async def limpiar_historial(telefono: str):

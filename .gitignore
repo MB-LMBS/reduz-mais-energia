@@ -27,6 +27,9 @@ data/
 # Session state
 config/session.yaml
 
+# Registo de acessos e credenciais (nunca subir)
+ACESSOS.md
+
 # OS
 .DS_Store
 Thumbs.db

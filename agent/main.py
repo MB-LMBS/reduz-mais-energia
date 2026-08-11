@@ -14,8 +14,9 @@ from fastapi.responses import PlainTextResponse
 from dotenv import load_dotenv
 
 from agent.brain import generar_respuesta
-from agent.memory import inicializar_db, guardar_mensaje, obtener_historial
+from agent.memory import inicializar_db, guardar_mensaje, obtener_historial, obtener_modo
 from agent.providers import obtener_proveedor
+from agent.admin import router as admin_router
 
 load_dotenv()
 
@@ -45,6 +46,7 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
+app.include_router(admin_router)
 
 
 @app.get("/")
@@ -78,6 +80,15 @@ async def webhook_handler(request: Request):
                 continue
 
             logger.info(f"Mensaje de {msg.telefono}: {msg.texto}")
+
+            # Si la conversación está en modo "manual", solo guardamos el
+            # mensaje para que el humano lo vea y responda desde /admin —
+            # el bot no interviene.
+            modo = await obtener_modo(msg.telefono)
+            if modo == "manual":
+                await guardar_mensaje(msg.telefono, "user", msg.texto)
+                logger.info(f"Conversación {msg.telefono} en modo manual — bot no responde")
+                continue
 
             # Obtener historial ANTES de guardar el mensaje actual
             # (brain.py agrega el mensaje actual, evitando duplicados)
