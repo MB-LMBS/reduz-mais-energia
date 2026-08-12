@@ -7,11 +7,14 @@ por número de teléfono usando SQLite (local) o PostgreSQL (producción).
 """
 
 import os
+import logging
 from datetime import datetime
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import String, Text, DateTime, select, Integer, func
+from sqlalchemy import String, Text, DateTime, select, Integer, func, inspect, text
 from dotenv import load_dotenv
+
+logger = logging.getLogger("agentkit")
 
 load_dotenv()
 
@@ -54,10 +57,27 @@ class Conversacion(Base):
     nome_contato: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
 
+def _columnas_existentes(conn, tabla: str) -> set[str]:
+    return {c["name"] for c in inspect(conn).get_columns(tabla)}
+
+
 async def inicializar_db():
-    """Crea las tablas si no existen."""
+    """
+    Crea las tablas si no existen y añade columnas nuevas a tablas ya
+    existentes (SQLAlchemy no hace esto automáticamente — sin esto, un
+    despliegue con una base de datos persistente antigua y un modelo
+    nuevo rompería el webhook con "no such column").
+    """
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+        for tabla in Base.metadata.tables.values():
+            existentes = await conn.run_sync(_columnas_existentes, tabla.name)
+            for columna in tabla.columns:
+                if columna.name not in existentes:
+                    tipo = columna.type.compile(engine.dialect)
+                    logger.info(f"Migrando: adicionando coluna {tabla.name}.{columna.name} ({tipo})")
+                    await conn.execute(text(f"ALTER TABLE {tabla.name} ADD COLUMN {columna.name} {tipo}"))
 
 
 async def guardar_mensaje(
