@@ -472,10 +472,9 @@ async def ver_conversa(telefono: str, auth: bool = Depends(verificar_password)):
             if (!resp.ok) return;
             var html = await resp.text();
             if (html.trim()) {{
-              var pertoDoFim = (window.innerHeight + window.scrollY) >= (document.body.offsetHeight - 150);
               container.insertAdjacentHTML('beforeend', html);
               ultimoId = ultimoIdAtual();
-              if (pertoDoFim) window.scrollTo(0, document.body.scrollHeight);
+              window.scrollTo(0, document.body.scrollHeight);
             }}
           }} catch (e) {{}}
         }}
