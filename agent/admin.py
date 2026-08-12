@@ -21,7 +21,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 
 from agent.memory import (
     listar_conversaciones, obtener_historial, obtener_modo, establecer_modo,
-    obtener_estado, establecer_estado, guardar_mensaje,
+    obtener_estado, establecer_estado, obtener_nome_contato, guardar_mensaje,
 )
 from agent.providers import obtener_proveedor
 
@@ -43,9 +43,17 @@ ESTILO = """
             color: #444; font-size: 0.9rem; }
   .tabs a.ativo { background: #0a7d4f; color: white; }
   .conversa { background: white; border-radius: 10px; padding: 12px 16px; margin-bottom: 10px;
-              display: block; box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
+              display: flex; gap: 10px; align-items: flex-start; box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
+  .conversa .corpo { flex: 1; min-width: 0; }
   .conversa .top { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
   .conversa .tel { font-weight: 600; }
+  .avatar { flex-shrink: 0; width: 40px; height: 40px; border-radius: 50%; display: flex;
+            align-items: center; justify-content: center; color: white; font-weight: 600;
+            font-size: 0.95rem; }
+  .cabecalho { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
+  .cabecalho .avatar { width: 48px; height: 48px; font-size: 1.1rem; }
+  .cabecalho .nome { font-size: 1.2rem; font-weight: 600; }
+  .cabecalho .tel { color: #666; font-size: 0.85rem; }
   .badges { display: flex; gap: 6px; }
   .badge { font-size: 0.75rem; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
   .badge.bot { background: #e3f2e9; color: #0a7d4f; }
@@ -71,6 +79,23 @@ ESTILO = """
   .toggle button.tratada.ativo { background: #666; border-color: #666; }
 </style>
 """
+
+
+# O WhatsApp Cloud API da Meta não disponibiliza a foto de perfil dos contactos
+# por razões de privacidade — como alternativa, geramos um avatar com as
+# iniciais do nome (ou os últimos dígitos do número, se o nome ainda não for
+# conhecido) numa cor estável por contacto.
+CORES_AVATAR = ["#0a7d4f", "#1d6fa5", "#a5521d", "#7d1da5", "#a51d4a", "#4a7d1d"]
+
+
+def _avatar_html(nome: str | None, telefono: str, tamanho_classe: str = "") -> str:
+    """Gera um avatar simples (iniciais em círculo colorido) para um contacto."""
+    if nome:
+        iniciais = "".join(p[0] for p in nome.split()[:2]).upper()
+    else:
+        iniciais = telefono[-2:]
+    cor = CORES_AVATAR[sum(ord(c) for c in telefono) % len(CORES_AVATAR)]
+    return f'<div class="avatar {tamanho_classe}" style="background:{cor}">{html.escape(iniciais)}</div>'
 
 
 def verificar_password(credentials: HTTPBasicCredentials = Depends(security)):
@@ -102,13 +127,18 @@ async def painel(estado: str = "aberta", auth: bool = Depends(verificar_password
             preview = f"[{c.get('ultimo_tipo', 'ficheiro')}]"
         badge_classe = "manual" if c["modo"] == "manual" else "bot"
         badge_texto = "Manual" if c["modo"] == "manual" else "Bot"
+        nome = c.get("nome_contato")
+        titulo = html.escape(nome) if nome else html.escape(c["telefono"])
         linhas += f"""
         <a class="conversa" href="/admin/conversa/{html.escape(c['telefono'])}">
-          <div class="top">
-            <span class="tel">{html.escape(c['telefono'])}</span>
-            <span class="badges"><span class="badge {badge_classe}">{badge_texto}</span></span>
+          {_avatar_html(nome, c['telefono'])}
+          <div class="corpo">
+            <div class="top">
+              <span class="tel">{titulo}</span>
+              <span class="badges"><span class="badge {badge_classe}">{badge_texto}</span></span>
+            </div>
+            <div class="preview">{preview}</div>
           </div>
-          <div class="preview">{preview}</div>
         </a>
         """
 
@@ -157,16 +187,24 @@ async def ver_conversa(telefono: str, auth: bool = Depends(verificar_password)):
     historico = await obtener_historial(telefono, limite=100)
     modo = await obtener_modo(telefono)
     estado = await obtener_estado(telefono)
+    nome = await obtener_nome_contato(telefono)
 
     mensagens_html = "".join(_render_mensagem(msg) for msg in historico)
+    titulo_pagina = nome or telefono
 
     return f"""
     <html>
-    <head><title>{html.escape(telefono)} — Reduz+ Energia</title>{ESTILO}
+    <head><title>{html.escape(titulo_pagina)} — Reduz+ Energia</title>{ESTILO}
     <meta name="viewport" content="width=device-width, initial-scale=1"></head>
     <body>
       <a href="/admin/">&larr; Conversas</a>
-      <h1>{html.escape(telefono)}</h1>
+      <div class="cabecalho">
+        {_avatar_html(nome, telefono)}
+        <div>
+          <div class="nome">{html.escape(nome) if nome else html.escape(telefono)}</div>
+          {f'<div class="tel">{html.escape(telefono)}</div>' if nome else ''}
+        </div>
+      </div>
 
       <div class="toggle">
         <form method="post" action="/admin/conversa/{telefono}/modo">

@@ -46,8 +46,17 @@ class ProveedorMeta(ProveedorWhatsApp):
         for entry in body.get("entry", []):
             for change in entry.get("changes", []):
                 value = change.get("value", {})
+
+                # Meta envía el nombre de perfil de WhatsApp junto a los mensajes,
+                # en un array "contacts" separado — lo mapeamos por número
+                nomes_contato = {
+                    c.get("wa_id"): c.get("profile", {}).get("name")
+                    for c in value.get("contacts", [])
+                }
+
                 for msg in value.get("messages", []):
                     tipo_meta = msg.get("type")
+                    nome_contato = nomes_contato.get(msg.get("from"))
 
                     if tipo_meta == "text":
                         mensajes.append(MensajeEntrante(
@@ -55,6 +64,7 @@ class ProveedorMeta(ProveedorWhatsApp):
                             texto=msg.get("text", {}).get("body", ""),
                             mensaje_id=msg.get("id", ""),
                             es_propio=False,
+                            nome_contato=nome_contato,
                         ))
                     elif tipo_meta in TIPOS_MEDIA:
                         dados_media = msg.get(tipo_meta, {})
@@ -67,6 +77,7 @@ class ProveedorMeta(ProveedorWhatsApp):
                             media_id=dados_media.get("id"),
                             mime_type=dados_media.get("mime_type"),
                             nome_ficheiro=dados_media.get("filename"),
+                            nome_contato=nome_contato,
                         ))
         return mensajes
 

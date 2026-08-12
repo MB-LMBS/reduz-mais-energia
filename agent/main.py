@@ -16,7 +16,10 @@ from fastapi.responses import PlainTextResponse
 from dotenv import load_dotenv
 
 from agent.brain import generar_respuesta
-from agent.memory import inicializar_db, guardar_mensaje, obtener_historial, obtener_modo, establecer_modo
+from agent.memory import (
+    inicializar_db, guardar_mensaje, obtener_historial, obtener_modo, establecer_modo,
+    establecer_nome_contato,
+)
 from agent.providers import obtener_proveedor
 from agent.admin import router as admin_router
 
@@ -126,6 +129,10 @@ async def webhook_handler(request: Request):
                 continue
 
             logger.info(f"Mensaje de {msg.telefono} ({msg.tipo}): {msg.texto}")
+
+            # Guardamos el nombre de perfil de WhatsApp del contacto, si vino informado
+            if msg.nome_contato:
+                await establecer_nome_contato(msg.telefono, msg.nome_contato)
 
             # Si el mensaje trae un archivo (imagen, PDF, etc.), lo descargamos
             # y guardamos localmente para poder verlo desde /admin

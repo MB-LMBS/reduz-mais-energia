@@ -22,6 +22,7 @@ class MensajeEntrante:
     media_id: str | None = None    # ID del archivo en el proveedor (para descargarlo)
     mime_type: str | None = None
     nome_ficheiro: str | None = None
+    nome_contato: str | None = None  # Nombre de perfil de WhatsApp del remitente, si el proveedor lo informa
 
 
 class ProveedorWhatsApp(ABC):

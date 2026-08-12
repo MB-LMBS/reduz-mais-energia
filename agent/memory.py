@@ -51,6 +51,7 @@ class Conversacion(Base):
     telefono: Mapped[str] = mapped_column(String(50), primary_key=True)
     modo: Mapped[str] = mapped_column(String(10), default="bot")      # "bot" o "manual"
     estado: Mapped[str] = mapped_column(String(10), default="aberta")  # "aberta" o "tratada"
+    nome_contato: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
 
 async def inicializar_db():
@@ -158,6 +159,30 @@ async def establecer_estado(telefono: str, estado: str):
         await session.commit()
 
 
+async def obtener_nome_contato(telefono: str) -> str | None:
+    """Retorna el nombre de perfil de WhatsApp del contacto, si ya lo conocemos."""
+    async with async_session() as session:
+        query = select(Conversacion).where(Conversacion.telefono == telefono)
+        result = await session.execute(query)
+        conversacion = result.scalar_one_or_none()
+        return conversacion.nome_contato if conversacion else None
+
+
+async def establecer_nome_contato(telefono: str, nome: str):
+    """Guarda o actualiza el nombre de perfil de WhatsApp del contacto."""
+    if not nome:
+        return
+    async with async_session() as session:
+        query = select(Conversacion).where(Conversacion.telefono == telefono)
+        result = await session.execute(query)
+        conversacion = result.scalar_one_or_none()
+        if conversacion:
+            conversacion.nome_contato = nome
+        else:
+            session.add(Conversacion(telefono=telefono, nome_contato=nome))
+        await session.commit()
+
+
 async def listar_conversaciones() -> list[dict]:
     """
     Lista todas las conversaciones con su último mensaje, modo y estado,
@@ -184,6 +209,7 @@ async def listar_conversaciones() -> list[dict]:
         for msg, _ in filas:
             modo = await obtener_modo(msg.telefono)
             estado = await obtener_estado(msg.telefono)
+            nome_contato = await obtener_nome_contato(msg.telefono)
             conversaciones.append({
                 "telefono": msg.telefono,
                 "ultimo_mensaje": msg.content,
@@ -192,6 +218,7 @@ async def listar_conversaciones() -> list[dict]:
                 "timestamp": msg.timestamp,
                 "modo": modo,
                 "estado": estado,
+                "nome_contato": nome_contato,
             })
         return conversaciones
 
