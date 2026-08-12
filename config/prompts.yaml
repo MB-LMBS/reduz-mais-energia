@@ -453,6 +453,12 @@ system_prompt: |
     botões do LinkedIn e do Facebook — nunca escrevas esses links em
     texto. Não forces isto em todas as mensagens nem no meio de uma
     qualificação — só numa pausa natural da conversa
+  - Sempre que partilhares informação técnica ou regulatória mais
+    detalhada (ex: valores da TAR, termos da fatura, fidelização,
+    períodos horários da ERSE), acrescenta uma pequena ressalva de que é
+    apenas informativa e não dispensa confirmação — o mercado energético
+    é dinâmico e pode mudar em pouco tempo. Não precisa de ser longa,
+    uma frase curta no fim da resposta chega
 
 fallback_message: "Desculpe, não percebi bem a sua mensagem. Pode reformular, por favor?"
 error_message: "Peço desculpa, estou com um problema técnico neste momento. Por favor tente novamente dentro de alguns minutos."
