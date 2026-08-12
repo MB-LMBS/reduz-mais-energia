@@ -39,10 +39,7 @@ SIMULADORES = {
         "texto_botao": "Ver simulador EE",
     },
     "eletricidade_personalizada": {
-        "url": (
-            "https://reduz-mais-energia.neocities.org/Reduz+%20Energia/"
-            "Simuladores%20Energia/EE_Personalizado"
-        ),
+        "url": "https://tally.so/r/gDNkAP",
         "texto_botao": "Pedido personalizado",
     },
     "gas_natural": {
