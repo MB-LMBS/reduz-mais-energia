@@ -25,7 +25,7 @@ from agent.memory import (
     listar_conversaciones, obtener_historial, obtener_modo, establecer_modo,
     obtener_estado, establecer_estado, obtener_nome_contato, obtener_categoria,
     establecer_categoria, CATEGORIAS_VALIDAS, guardar_mensaje, listar_agendamentos,
-    editar_mensagem, apagar_mensagem,
+    editar_mensagem, apagar_mensagem, obtener_mensagens_novas,
 )
 from agent.agenda import formatar_slot
 from agent.providers import obtener_proveedor
@@ -213,6 +213,7 @@ async def painel(estado: str = "aberta", categoria: str = "todas", auth: bool = 
       </div>
       <div class="filtros">{filtros_categoria}</div>
       {linhas}
+      <script>setInterval(function() {{ location.reload(); }}, 20000);</script>
     </body>
     </html>
     """
@@ -304,7 +305,7 @@ def _render_mensagem(msg: dict, telefono: str) -> str:
         </div>
         """
 
-    return f'<div class="msg {classe}">{partes}</div>'
+    return f'<div class="msg {classe}" data-msg-id="{msg["id"]}">{partes}</div>'
 
 
 @router.get("/conversa/{telefono}", response_class=HTMLResponse)
@@ -367,7 +368,7 @@ async def ver_conversa(telefono: str, auth: bool = Depends(verificar_password)):
         )}
       </div>
 
-      {mensagens_html}
+      <div id="mensagens">{mensagens_html}</div>
 
       <form class="reply" method="post" action="/admin/conversa/{telefono}/responder" enctype="multipart/form-data">
         <textarea name="texto" rows="2" placeholder="Escrever resposta..."
@@ -375,9 +376,47 @@ async def ver_conversa(telefono: str, auth: bool = Depends(verificar_password)):
         <button type="submit">Enviar</button>
         <input class="anexo" type="file" name="ficheiro">
       </form>
+
+      <script>
+      (function() {{
+        var telefone = {telefono!r};
+        var container = document.getElementById('mensagens');
+
+        function ultimoIdAtual() {{
+          var nos = container.querySelectorAll('[data-msg-id]');
+          if (!nos.length) return 0;
+          return parseInt(nos[nos.length - 1].dataset.msgId, 10);
+        }}
+
+        var ultimoId = ultimoIdAtual();
+
+        async function verificarNovas() {{
+          try {{
+            var resp = await fetch('/admin/conversa/' + telefone + '/novas?desde=' + ultimoId);
+            if (!resp.ok) return;
+            var html = await resp.text();
+            if (html.trim()) {{
+              var pertoDoFim = (window.innerHeight + window.scrollY) >= (document.body.offsetHeight - 150);
+              container.insertAdjacentHTML('beforeend', html);
+              ultimoId = ultimoIdAtual();
+              if (pertoDoFim) window.scrollTo(0, document.body.scrollHeight);
+            }}
+          }} catch (e) {{}}
+        }}
+
+        setInterval(verificarNovas, 4000);
+      }})();
+      </script>
     </body>
     </html>
     """
+
+
+@router.get("/conversa/{telefono}/novas", response_class=HTMLResponse)
+async def mensagens_novas(telefono: str, desde: int = 0, auth: bool = Depends(verificar_password)):
+    """Retorna em HTML as mensagens novas de uma conversa — usado para atualizar a página automaticamente."""
+    novas = await obtener_mensagens_novas(telefono, desde)
+    return "".join(_render_mensagem(msg, telefono) for msg in novas)
 
 
 @router.post("/conversa/{telefono}/modo")

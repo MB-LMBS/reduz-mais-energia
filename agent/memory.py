@@ -154,6 +154,33 @@ async def obtener_historial(telefono: str, limite: int = 20) -> list[dict]:
         ]
 
 
+async def obtener_mensagens_novas(telefono: str, desde_id: int) -> list[dict]:
+    """
+    Retorna as mensagens de uma conversa com id maior que desde_id — usado
+    pelo painel para atualizar a conversa automaticamente sem refresh.
+    """
+    async with async_session() as session:
+        query = (
+            select(Mensaje)
+            .where(Mensaje.telefono == telefono, Mensaje.id > desde_id)
+            .order_by(Mensaje.timestamp.asc())
+        )
+        result = await session.execute(query)
+        mensajes = result.scalars().all()
+        return [
+            {
+                "id": msg.id,
+                "role": msg.role,
+                "content": msg.content,
+                "tipo": msg.tipo,
+                "media_path": msg.media_path,
+                "nome_ficheiro": msg.nome_ficheiro,
+                "timestamp": msg.timestamp,
+            }
+            for msg in mensajes
+        ]
+
+
 async def obtener_modo(telefono: str) -> str:
     """Retorna el modo actual de la conversación: 'bot' (default) o 'manual'."""
     async with async_session() as session:
