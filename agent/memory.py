@@ -9,6 +9,7 @@ por número de teléfono usando SQLite (local) o PostgreSQL (producción).
 import os
 import logging
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy import String, Text, DateTime, select, Integer, func, inspect, text
@@ -57,6 +58,20 @@ class Conversacion(Base):
     nome_contato: Mapped[str | None] = mapped_column(String(100), nullable=True)
     # Categoría comercial: "sem_categoria", "interessado", "ganho" o "perdido"
     categoria: Mapped[str] = mapped_column(String(20), default="sem_categoria")
+
+
+class Agendamento(Base):
+    """Uma chamada agendada com um cliente."""
+    __tablename__ = "agendamentos"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    telefono: Mapped[str] = mapped_column(String(50), index=True)
+    nome_cliente: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # Guardado como hora local de Portugal (naive), não UTC — simplifica a grelha de slots
+    data_hora: Mapped[datetime] = mapped_column(DateTime, index=True)
+    informacao: Mapped[str] = mapped_column(Text)  # o que o cliente quer discutir
+    criado_em: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    estado: Mapped[str] = mapped_column(String(20), default="agendado")  # agendado, realizado, cancelado
 
 
 def _columnas_existentes(conn, tabla: str) -> set[str]:
@@ -127,6 +142,7 @@ async def obtener_historial(telefono: str, limite: int = 20) -> list[dict]:
 
         return [
             {
+                "id": msg.id,
                 "role": msg.role,
                 "content": msg.content,
                 "tipo": msg.tipo,
@@ -273,6 +289,62 @@ async def listar_conversaciones() -> list[dict]:
         return conversaciones
 
 
+async def obtener_horarios_ocupados(inicio: datetime, fim: datetime) -> set[datetime]:
+    """Retorna os horários (hora local) já ocupados por agendamentos ativos num intervalo."""
+    async with async_session() as session:
+        query = select(Agendamento.data_hora).where(
+            Agendamento.data_hora >= inicio,
+            Agendamento.data_hora < fim,
+            Agendamento.estado == "agendado",
+        )
+        result = await session.execute(query)
+        return set(result.scalars().all())
+
+
+async def criar_agendamento(
+    telefono: str, nome_cliente: str | None, data_hora: datetime, informacao: str
+) -> bool:
+    """
+    Cria um agendamento se o horário ainda estiver livre.
+    Retorna False se alguém já tiver ocupado esse horário entretanto.
+    """
+    async with async_session() as session:
+        query = select(Agendamento).where(
+            Agendamento.data_hora == data_hora,
+            Agendamento.estado == "agendado",
+        )
+        result = await session.execute(query)
+        if result.scalar_one_or_none():
+            return False
+        session.add(Agendamento(
+            telefono=telefono, nome_cliente=nome_cliente,
+            data_hora=data_hora, informacao=informacao,
+        ))
+        await session.commit()
+        return True
+
+
+async def listar_agendamentos(apenas_futuros: bool = True) -> list[dict]:
+    """Lista os agendamentos ativos, mais próximos primeiro."""
+    async with async_session() as session:
+        query = select(Agendamento).where(Agendamento.estado == "agendado")
+        if apenas_futuros:
+            agora_lisboa = datetime.now(ZoneInfo("Europe/Lisbon")).replace(tzinfo=None)
+            query = query.where(Agendamento.data_hora >= agora_lisboa)
+        query = query.order_by(Agendamento.data_hora.asc())
+        result = await session.execute(query)
+        return [
+            {
+                "id": a.id,
+                "telefono": a.telefono,
+                "nome_cliente": a.nome_cliente,
+                "data_hora": a.data_hora,
+                "informacao": a.informacao,
+            }
+            for a in result.scalars().all()
+        ]
+
+
 async def limpiar_historial(telefono: str):
     """Borra todo el historial de una conversación."""
     async with async_session() as session:
@@ -280,5 +352,35 @@ async def limpiar_historial(telefono: str):
         result = await session.execute(query)
         mensajes = result.scalars().all()
         for msg in mensajes:
-            session.delete(msg)
+            await session.delete(msg)
         await session.commit()
+
+
+async def editar_mensagem(mensagem_id: int, novo_texto: str) -> bool:
+    """
+    Corrige o texto de uma mensagem enviada manualmente pelo painel (role
+    'humano'). Só edita o registo local — não altera nem reenvia nada no
+    WhatsApp do cliente, que já recebeu a mensagem original.
+    """
+    async with async_session() as session:
+        msg = await session.get(Mensaje, mensagem_id)
+        if not msg or msg.role != "humano":
+            return False
+        msg.content = novo_texto
+        await session.commit()
+        return True
+
+
+async def apagar_mensagem(mensagem_id: int) -> bool:
+    """
+    Remove do registo local uma mensagem enviada manualmente pelo painel
+    (role 'humano'). Só apaga o registo local — não a remove do WhatsApp
+    do cliente, que já a recebeu.
+    """
+    async with async_session() as session:
+        msg = await session.get(Mensaje, mensagem_id)
+        if not msg or msg.role != "humano":
+            return False
+        await session.delete(msg)
+        await session.commit()
+        return True

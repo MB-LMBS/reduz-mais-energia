@@ -21,7 +21,7 @@ from agent.memory import (
     establecer_nome_contato,
 )
 from agent.providers import obtener_proveedor
-from agent.notificacoes import notificar_consultor
+from agent.notificacoes import notificar_consultor, notificar_agendamento
 from agent.admin import router as admin_router
 
 load_dotenv()
@@ -142,7 +142,7 @@ async def webhook_handler(request: Request):
             historial = await obtener_historial(msg.telefono)
 
             # Generar respuesta con Claude
-            respuesta, escalar = await generar_respuesta(texto_para_ia, historial)
+            respuesta, escalar, agendamento = await generar_respuesta(texto_para_ia, historial, msg.telefono)
 
             # Guardar mensaje del usuario Y respuesta del agente en memoria
             await guardar_mensaje(
@@ -161,6 +161,11 @@ async def webhook_handler(request: Request):
             if escalar:
                 await notificar_consultor(proveedor, msg.telefono, historial, msg.texto)
                 await establecer_modo(msg.telefono, "manual")
+
+            # Si se marcó una chamada, avisamos al consultor con toda la
+            # información que el cliente registró
+            if agendamento:
+                await notificar_agendamento(proveedor, agendamento)
 
         return {"status": "ok"}
 

@@ -24,8 +24,10 @@ from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from agent.memory import (
     listar_conversaciones, obtener_historial, obtener_modo, establecer_modo,
     obtener_estado, establecer_estado, obtener_nome_contato, obtener_categoria,
-    establecer_categoria, CATEGORIAS_VALIDAS, guardar_mensaje,
+    establecer_categoria, CATEGORIAS_VALIDAS, guardar_mensaje, listar_agendamentos,
+    editar_mensagem, apagar_mensagem,
 )
+from agent.agenda import formatar_slot
 from agent.providers import obtener_proveedor
 from agent.notificacoes import notificar_consultor, NUMERO_CONSULTOR
 
@@ -81,6 +83,13 @@ ESTILO = """
   .msg img { max-width: 100%; border-radius: 8px; display: block; margin-bottom: 4px; }
   .msg .ficheiro { display: block; font-size: 0.85rem; }
   .msg .hora { display: block; font-size: 0.7rem; color: #999; margin-top: 3px; text-align: right; }
+  .msg-acoes { display: flex; gap: 10px; justify-content: flex-end; margin-top: 4px; }
+  .msg-acoes summary, .msg-acoes .btn-apagar { font-size: 0.75rem; color: #666; cursor: pointer;
+                                                 background: none; border: none; padding: 0; }
+  .msg-acoes .btn-apagar { color: #c0392b; }
+  .form-editar { display: flex; gap: 6px; margin-top: 6px; }
+  .form-editar textarea { flex: 1; padding: 6px; border-radius: 6px; border: 1px solid #ccc; resize: none; }
+  .form-editar button { padding: 0 10px; border-radius: 6px; border: none; background: #0a7d4f; color: white; }
   form.reply { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; position: sticky; bottom: 0;
                background: #f5f5f5; padding: 8px 0; }
   form.reply textarea { flex: 1; min-width: 140px; padding: 10px; border-radius: 8px; border: 1px solid #ccc;
@@ -95,6 +104,15 @@ ESTILO = """
   .toggle button.interessado.ativo { background: #a5701d; border-color: #a5701d; }
   .toggle button.ganho.ativo { background: #0a7d4f; border-color: #0a7d4f; }
   .toggle button.perdido.ativo { background: #c0392b; border-color: #c0392b; }
+  .topo { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .link-agenda { padding: 8px 14px; border-radius: 8px; background: white; color: #444;
+                 font-size: 0.9rem; border: 1px solid #ddd; }
+  .agendamento { background: white; border-radius: 10px; padding: 12px 16px; margin-bottom: 10px;
+                 box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
+  .agendamento .quando { font-weight: 600; color: #0a7d4f; }
+  .agendamento .nome { font-weight: 600; }
+  .agendamento .tel { color: #666; font-size: 0.85rem; }
+  .agendamento .info { margin-top: 6px; font-size: 0.9rem; white-space: pre-wrap; }
 </style>
 """
 
@@ -185,12 +203,51 @@ async def painel(estado: str = "aberta", categoria: str = "todas", auth: bool = 
     <head><title>Conversas — Reduz+ Energia</title>{ESTILO}
     <meta name="viewport" content="width=device-width, initial-scale=1"></head>
     <body>
-      <h1>Conversas</h1>
+      <div class="topo">
+        <h1>Conversas</h1>
+        <a class="link-agenda" href="/admin/agenda">📅 Agenda</a>
+      </div>
       <div class="tabs">
         <a href="/admin/?estado=aberta&categoria={categoria}" class="{'ativo' if estado == 'aberta' else ''}">Em aberto ({n_abertas})</a>
         <a href="/admin/?estado=tratada&categoria={categoria}" class="{'ativo' if estado == 'tratada' else ''}">Tratadas ({n_tratadas})</a>
       </div>
       <div class="filtros">{filtros_categoria}</div>
+      {linhas}
+    </body>
+    </html>
+    """
+
+
+@router.get("/agenda", response_class=HTMLResponse)
+async def agenda(auth: bool = Depends(verificar_password)):
+    """Lista as próximas chamadas agendadas pelos clientes."""
+    agendamentos = await listar_agendamentos()
+
+    linhas = ""
+    for a in agendamentos:
+        nome = html.escape(a["nome_cliente"]) if a.get("nome_cliente") else "(nome não indicado)"
+        telefone = html.escape(a["telefono"])
+        quando = formatar_slot(a["data_hora"])
+        informacao = html.escape(a.get("informacao") or "")
+        linhas += f"""
+        <div class="agendamento">
+          <div class="quando">{quando}</div>
+          <div class="nome">{nome}</div>
+          <div class="tel"><a href="/admin/conversa/{telefone}">{telefone}</a></div>
+          <div class="info">{informacao}</div>
+        </div>
+        """
+
+    if not agendamentos:
+        linhas = "<p>Sem chamadas agendadas de momento.</p>"
+
+    return f"""
+    <html>
+    <head><title>Agenda — Reduz+ Energia</title>{ESTILO}
+    <meta name="viewport" content="width=device-width, initial-scale=1"></head>
+    <body>
+      <a href="/admin/">&larr; Conversas</a>
+      <h1>Próximas chamadas agendadas</h1>
       {linhas}
     </body>
     </html>
@@ -208,7 +265,7 @@ def _formatar_hora(timestamp: datetime | None) -> str:
     return hora_local.strftime("%d/%m %H:%M")
 
 
-def _render_mensagem(msg: dict) -> str:
+def _render_mensagem(msg: dict, telefono: str) -> str:
     """Gera o HTML de uma mensagem, incluindo pré-visualização de ficheiros e hora."""
     classe = "user" if msg["role"] == "user" else ("humano" if msg["role"] == "humano" else "assistant")
     partes = ""
@@ -227,6 +284,26 @@ def _render_mensagem(msg: dict) -> str:
 
     partes += f'<small class="hora">{_formatar_hora(msg.get("timestamp"))}</small>'
 
+    # Mensagens enviadas manualmente pelo painel podem ser corrigidas ou
+    # apagadas do registo (não afeta o que o cliente já recebeu no WhatsApp)
+    if msg["role"] == "humano" and msg.get("id"):
+        conteudo_editavel = html.escape(msg["content"] or "")
+        partes += f"""
+        <div class="msg-acoes">
+          <details>
+            <summary>✏️ Editar</summary>
+            <form class="form-editar" method="post" action="/admin/conversa/{telefono}/mensagem/{msg['id']}/editar">
+              <textarea name="texto" rows="2">{conteudo_editavel}</textarea>
+              <button type="submit">Guardar</button>
+            </form>
+          </details>
+          <form method="post" action="/admin/conversa/{telefono}/mensagem/{msg['id']}/apagar"
+                onsubmit="return confirm('Apagar esta mensagem do registo? Isto não a remove do WhatsApp do cliente, que já a recebeu.')">
+            <button type="submit" class="btn-apagar">🗑️ Apagar</button>
+          </form>
+        </div>
+        """
+
     return f'<div class="msg {classe}">{partes}</div>'
 
 
@@ -239,7 +316,7 @@ async def ver_conversa(telefono: str, auth: bool = Depends(verificar_password)):
     categoria = await obtener_categoria(telefono)
     nome = await obtener_nome_contato(telefono)
 
-    mensagens_html = "".join(_render_mensagem(msg) for msg in historico)
+    mensagens_html = "".join(_render_mensagem(msg, telefono) for msg in historico)
     titulo_pagina = nome or telefono
 
     return f"""
@@ -293,7 +370,8 @@ async def ver_conversa(telefono: str, auth: bool = Depends(verificar_password)):
       {mensagens_html}
 
       <form class="reply" method="post" action="/admin/conversa/{telefono}/responder" enctype="multipart/form-data">
-        <textarea name="texto" rows="2" placeholder="Escrever resposta..."></textarea>
+        <textarea name="texto" rows="2" placeholder="Escrever resposta..."
+                  onkeydown="if(event.key==='Enter' &amp;&amp; !event.shiftKey){{event.preventDefault(); this.form.requestSubmit();}}"></textarea>
         <button type="submit">Enviar</button>
         <input class="anexo" type="file" name="ficheiro">
       </form>
@@ -377,6 +455,22 @@ async def responder_manual(
         else:
             logger.warning(f"Falha ao enviar resposta manual a {telefono}")
 
+    return RedirectResponse(url=f"/admin/conversa/{telefono}", status_code=303)
+
+
+@router.post("/conversa/{telefono}/mensagem/{mensagem_id}/editar")
+async def editar_mensagem_manual(
+    telefono: str, mensagem_id: int, texto: str = Form(...), auth: bool = Depends(verificar_password)
+):
+    """Corrige o texto de uma mensagem enviada manualmente (só no registo do painel)."""
+    await editar_mensagem(mensagem_id, texto)
+    return RedirectResponse(url=f"/admin/conversa/{telefono}", status_code=303)
+
+
+@router.post("/conversa/{telefono}/mensagem/{mensagem_id}/apagar")
+async def apagar_mensagem_manual(telefono: str, mensagem_id: int, auth: bool = Depends(verificar_password)):
+    """Remove do registo do painel uma mensagem enviada manualmente."""
+    await apagar_mensagem(mensagem_id)
     return RedirectResponse(url=f"/admin/conversa/{telefono}", status_code=303)
 
 

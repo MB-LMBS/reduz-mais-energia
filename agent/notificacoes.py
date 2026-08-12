@@ -10,6 +10,8 @@ de consultor) como manualmente (botón "Encaminhar para consultor" en /admin).
 import os
 import logging
 
+from agent.agenda import formatar_slot
+
 logger = logging.getLogger("agentkit")
 
 # Número personal a donde se reenvía la conversación
@@ -36,5 +38,35 @@ async def notificar_consultor(
         lineas.append(f"*Cliente:* {mensaje_actual}")
     lineas.append("")
     lineas.append(f"Responde diretamente ao cliente em: /admin/conversa/{telefono_cliente}")
+
+    return await proveedor.enviar_mensaje(NUMERO_CONSULTOR, "\n".join(lineas))
+
+
+async def notificar_agendamento(proveedor, agendamento: dict) -> bool:
+    """
+    Envía un alerta al WhatsApp personal del consultor cuando se marca una
+    chamada, con toda la información que el cliente registró.
+    Retorna True si se envió con éxito.
+    """
+    if not NUMERO_CONSULTOR:
+        logger.warning("NUMERO_CONSULTOR no configurado — no se puede notificar agendamento")
+        return False
+
+    nome = agendamento.get("nome_cliente") or "(nome não indicado)"
+    telefone = agendamento["telefono"]
+    slot = formatar_slot(agendamento["data_hora"])
+    informacao = agendamento.get("informacao") or "(sem informação adicional)"
+
+    lineas = [
+        "📅 *Chamada agendada*",
+        "",
+        f"*Cliente:* {nome}",
+        f"*Telefone:* {telefone}",
+        f"*Quando:* {slot}",
+        "",
+        f"*Informação registada:*\n{informacao}",
+        "",
+        f"Ver conversa: /admin/conversa/{telefone}",
+    ]
 
     return await proveedor.enviar_mensaje(NUMERO_CONSULTOR, "\n".join(lineas))

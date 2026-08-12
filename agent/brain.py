@@ -14,14 +14,16 @@ from zoneinfo import ZoneInfo
 from anthropic import AsyncAnthropic
 from dotenv import load_dotenv
 
+from agent.agenda import proximos_horarios_disponiveis, formatar_slot, slot_e_valido
+from agent.memory import criar_agendamento
+
 load_dotenv()
 logger = logging.getLogger("agentkit")
 
 # Cliente de Anthropic
 client = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
-# Herramienta que el modelo activa cuando el cliente pide o acepta hablar
-# con un consultor humano
+# Herramientas que el modelo puede activar durante la conversación
 HERRAMIENTAS = [
     {
         "name": "escalar_a_consultor",
@@ -41,8 +43,47 @@ HERRAMIENTAS = [
             },
             "required": ["motivo"],
         },
-    }
+    },
+    {
+        "name": "agendar_chamada",
+        "description": (
+            "Usa esta ferramenta para marcar uma chamada telefónica com um consultor, "
+            "depois de o cliente escolher um dos horários disponíveis que lhe foram "
+            "sugeridos (secção 'Agendamento de chamadas' abaixo). Só uses esta "
+            "ferramenta depois de confirmares com o cliente o horário exato, o nome "
+            "dele e o motivo da chamada — nunca marques sem essa confirmação."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "string",
+                    "description": "Data escolhida, no formato AAAA-MM-DD.",
+                },
+                "hora": {
+                    "type": "string",
+                    "description": "Hora escolhida, no formato HH:MM (ex: 14:00, 14:15, 14:30...).",
+                },
+                "nome": {
+                    "type": "string",
+                    "description": "Nome do cliente para quem o consultor deve perguntar na chamada.",
+                },
+                "informacao": {
+                    "type": "string",
+                    "description": (
+                        "Resumo do que o cliente quer discutir na chamada — situação "
+                        "atual, o que procura, e qualquer outro dado relevante que "
+                        "tenha partilhado na conversa."
+                    ),
+                },
+            },
+            "required": ["data", "hora", "nome", "informacao"],
+        },
+    },
 ]
+
+DIAS_SEMANA = ["segunda-feira", "terça-feira", "quarta-feira", "quinta-feira",
+               "sexta-feira", "sábado", "domingo"]
 
 
 def cargar_config_prompts() -> dict:
@@ -53,10 +94,6 @@ def cargar_config_prompts() -> dict:
     except FileNotFoundError:
         logger.error("config/prompts.yaml no encontrado")
         return {}
-
-
-DIAS_SEMANA = ["segunda-feira", "terça-feira", "quarta-feira", "quinta-feira",
-               "sexta-feira", "sábado", "domingo"]
 
 
 def obtener_contexto_temporal() -> str:
@@ -76,11 +113,39 @@ def obtener_contexto_temporal() -> str:
     )
 
 
-def cargar_system_prompt() -> str:
-    """Lee el system prompt desde config/prompts.yaml, con la fecha/hora actual añadida."""
+async def obtener_contexto_agenda() -> str:
+    """
+    Genera un bloque con los próximos horarios libres para chamadas telefónicas,
+    para que el modelo pueda ofrecerlos directamente sin inventar horas.
+    """
+    slots = await proximos_horarios_disponiveis(quantidade=6)
+    if not slots:
+        return (
+            "\n\n## Agendamento de chamadas\n"
+            "De momento não há horários disponíveis nos próximos dias — informa "
+            "o cliente e sugere que a equipa entre em contacto por outra via."
+        )
+    linhas = "\n".join(f"- {formatar_slot(slot)}" for slot in slots)
+    return (
+        "\n\n## Agendamento de chamadas\n"
+        "Se o cliente mostrar interesse em falar por telefone com um consultor, "
+        "podes oferecer-lhe uma chamada. As chamadas são sempre à tarde "
+        "(14h-18h), de Segunda a Sábado, em blocos de 15 minutos. Os próximos "
+        "horários livres são:\n"
+        f"{linhas}\n"
+        "Confirma com o cliente o horário exato, o nome dele e o motivo da "
+        "chamada, e só depois usa a ferramenta agendar_chamada para a marcar. "
+        "Se o cliente preferir outro dia/hora dentro da grelha, podes marcar "
+        "diretamente — a ferramenta valida se está mesmo livre."
+    )
+
+
+async def cargar_system_prompt() -> str:
+    """Lee el system prompt desde config/prompts.yaml, con contexto dinámico añadido."""
     config = cargar_config_prompts()
     base = config.get("system_prompt", "Eres un asistente útil. Responde en español.")
-    return base + obtener_contexto_temporal()
+    contexto_agenda = await obtener_contexto_agenda()
+    return base + obtener_contexto_temporal() + contexto_agenda
 
 
 def obtener_mensaje_error() -> str:
@@ -95,23 +160,85 @@ def obtener_mensaje_fallback() -> str:
     return config.get("fallback_message", "Disculpa, no entendí tu mensaje. ¿Podrías reformularlo?")
 
 
-async def generar_respuesta(mensaje: str, historial: list[dict]) -> tuple[str, bool]:
+async def _processar_agendamento(entrada: dict, telefono: str) -> tuple[str, dict | None]:
+    """
+    Valida y regista un pedido de agendamento vindo da ferramenta agendar_chamada.
+
+    Returns:
+        Tupla (mensagem_para_o_modelo, dados_do_agendamento) — dados_do_agendamento
+        é None se o agendamento falhou (horário inválido ou já ocupado).
+    """
+    data = (entrada.get("data") or "").strip()
+    hora = (entrada.get("hora") or "").strip()
+    nome = (entrada.get("nome") or "").strip()
+    informacao = (entrada.get("informacao") or "").strip()
+
+    try:
+        data_hora = datetime.strptime(f"{data} {hora}", "%Y-%m-%d %H:%M")
+    except ValueError:
+        return (
+            "Não foi possível marcar: a data ou hora não estão num formato válido "
+            "(AAAA-MM-DD e HH:MM). Confirma o horário com o cliente e tenta de novo.",
+            None,
+        )
+
+    if not slot_e_valido(data_hora):
+        return (
+            "Não foi possível marcar: esse horário está fora da grelha permitida "
+            "(tardes de Segunda a Sábado, 14h-18h, blocos de 15 min). Sugere ao "
+            "cliente um dos horários disponíveis listados no contexto.",
+            None,
+        )
+
+    agora = datetime.now(ZoneInfo("Europe/Lisbon")).replace(tzinfo=None)
+    if data_hora <= agora:
+        return (
+            "Não foi possível marcar: esse horário já passou. Sugere ao cliente "
+            "um dos próximos horários disponíveis.",
+            None,
+        )
+
+    sucesso = await criar_agendamento(telefono, nome or None, data_hora, informacao)
+    if not sucesso:
+        return (
+            "Não foi possível marcar: esse horário acabou de ser ocupado por outra "
+            "pessoa. Sugere ao cliente escolher outro horário disponível.",
+            None,
+        )
+
+    dados = {
+        "telefono": telefono,
+        "nome_cliente": nome,
+        "data_hora": data_hora,
+        "informacao": informacao,
+    }
+    logger.info(f"Chamada agendada: {telefono} — {formatar_slot(data_hora)}")
+    return (
+        f"Chamada marcada com sucesso para {formatar_slot(data_hora)}. "
+        "Confirma isto ao cliente de forma clara e simpática.",
+        dados,
+    )
+
+
+async def generar_respuesta(mensaje: str, historial: list[dict], telefono: str) -> tuple[str, bool, dict | None]:
     """
     Genera una respuesta usando Claude API.
 
     Args:
         mensaje: El mensaje nuevo del usuario
         historial: Lista de mensajes anteriores [{"role": "user/assistant/humano", "content": "..."}]
+        telefono: Número de teléfono del cliente (necesario para agendar chamadas)
 
     Returns:
-        Tupla (respuesta, escalar_a_consultor) — escalar_a_consultor es True si el
-        cliente pidió o aceptó hablar con un consultor humano.
+        Tupla (respuesta, escalar_a_consultor, agendamento) — escalar_a_consultor es
+        True si el cliente pidió/aceptó hablar con un consultor humano; agendamento
+        es None o un dict con los detalles de una chamada recién marcada.
     """
     # Si el mensaje es muy corto o vacío, usar fallback
     if not mensaje or len(mensaje.strip()) < 2:
-        return obtener_mensaje_fallback(), False
+        return obtener_mensaje_fallback(), False, None
 
-    system_prompt = cargar_system_prompt()
+    system_prompt = await cargar_system_prompt()
 
     # Construir mensajes para la API — "humano" (respuestas manuales desde /admin)
     # se envía como "assistant", Claude solo conoce esos dos roles
@@ -132,6 +259,9 @@ async def generar_respuesta(mensaje: str, historial: list[dict]) -> tuple[str, b
         "content": mensaje
     })
 
+    escalar = False
+    agendamento = None
+
     try:
         response = await client.messages.create(
             model="claude-sonnet-4-6",
@@ -141,25 +271,34 @@ async def generar_respuesta(mensaje: str, historial: list[dict]) -> tuple[str, b
             messages=mensajes
         )
 
-        escalar = False
-
-        # Si el modelo activó la herramienta de escalado, completamos el ciclo
-        # de tool-use para que genere la respuesta final al cliente
-        if response.stop_reason == "tool_use":
-            tool_use = next(b for b in response.content if b.type == "tool_use")
-            if tool_use.name == "escalar_a_consultor":
-                escalar = True
-                logger.info(f"Escalado a consultor: {tool_use.input.get('motivo')}")
-
+        # Ciclo de tool-use: el modelo puede activar una o varias herramientas
+        # antes de dar la respuesta final al cliente (con un límite de seguridad)
+        intentos = 0
+        while response.stop_reason == "tool_use" and intentos < 4:
+            intentos += 1
+            tool_blocks = [b for b in response.content if b.type == "tool_use"]
             mensajes.append({"role": "assistant", "content": response.content})
-            mensajes.append({
-                "role": "user",
-                "content": [{
+
+            resultados_tool = []
+            for tool_use in tool_blocks:
+                if tool_use.name == "escalar_a_consultor":
+                    escalar = True
+                    logger.info(f"Escalado a consultor: {tool_use.input.get('motivo')}")
+                    resultado_texto = "Consultor notificado, vai entrar em contacto em breve."
+                elif tool_use.name == "agendar_chamada":
+                    resultado_texto, dados = await _processar_agendamento(tool_use.input, telefono)
+                    if dados:
+                        agendamento = dados
+                else:
+                    resultado_texto = "Ferramenta desconhecida."
+
+                resultados_tool.append({
                     "type": "tool_result",
                     "tool_use_id": tool_use.id,
-                    "content": "Consultor notificado, vai entrar em contacto em breve.",
-                }],
-            })
+                    "content": resultado_texto,
+                })
+
+            mensajes.append({"role": "user", "content": resultados_tool})
             response = await client.messages.create(
                 model="claude-sonnet-4-6",
                 max_tokens=1024,
@@ -170,8 +309,8 @@ async def generar_respuesta(mensaje: str, historial: list[dict]) -> tuple[str, b
 
         texto = next((b.text for b in response.content if b.type == "text"), "")
         logger.info(f"Respuesta generada ({response.usage.input_tokens} in / {response.usage.output_tokens} out)")
-        return texto, escalar
+        return texto, escalar, agendamento
 
     except Exception as e:
         logger.error(f"Error Claude API: {e}")
-        return obtener_mensaje_error(), False
+        return obtener_mensaje_error(), False, None
