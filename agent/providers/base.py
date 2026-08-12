@@ -56,6 +56,14 @@ class ProveedorWhatsApp(ABC):
         """
         return await self.enviar_mensaje(telefono, f"{texto}\n\n👉 {url}")
 
+    async def enviar_imagem_url(self, telefono: str, url: str, legenda: str = "") -> bool:
+        """
+        Envía uma imagem a partir de um URL público, com legenda (ex: logótipo
+        com a mensagem de boas-vindas). Por defeito (se o proveedor não
+        suportar), cai para texto simples.
+        """
+        return await self.enviar_mensaje(telefono, legenda)
+
     async def baixar_media(self, media_id: str) -> tuple[bytes, str] | None:
         """Descarga un archivo recibido. Retorna (contenido, mime_type) o None si falla."""
         return None

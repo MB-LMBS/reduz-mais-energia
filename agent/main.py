@@ -31,7 +31,7 @@ from agent.notificacoes import (
 )
 from agent.calendario import criar_evento_chamada as criar_evento_icloud
 from agent.outlook_calendar import criar_evento_chamada as criar_evento_outlook
-from agent.admin import router as admin_router
+from agent.admin import router as admin_router, LOGO_URL
 
 load_dotenv()
 
@@ -190,6 +190,7 @@ async def webhook_handler(request: Request):
             # Obtener historial ANTES de guardar el mensaje actual
             # (brain.py agrega el mensaje actual, evitando duplicados)
             historial = await obtener_historial(msg.telefono)
+            primeira_mensagem = not historial
 
             # Generar respuesta con Claude
             respuesta, escalar, agendamento, opcoes, link_botao, motivo_escalada, links_multiplos = \
@@ -203,17 +204,23 @@ async def webhook_handler(request: Request):
             await guardar_mensaje(msg.telefono, "assistant", respuesta)
 
             # Enviar respuesta por WhatsApp via el proveedor — com botões de
-            # resposta rápida, de link, ou vários links (um por mensagem)
+            # resposta rápida, de link, vários links (redes sociais, com o
+            # logótipo a acompanhar o agradecimento), ou o logótipo na
+            # primeira mensagem da conversa (boas-vindas)
             if links_multiplos:
-                for i, link in enumerate(links_multiplos):
-                    corpo = respuesta if i == 0 else f"E também no {link['texto_botao']}:"
-                    await proveedor.enviar_botao_link(msg.telefono, corpo, link["texto_botao"], link["url"])
+                await proveedor.enviar_imagem_url(msg.telefono, LOGO_URL, respuesta)
+                for link in links_multiplos:
+                    await proveedor.enviar_botao_link(
+                        msg.telefono, f"Siga-nos no {link['texto_botao']}:", link["texto_botao"], link["url"]
+                    )
             elif link_botao:
                 await proveedor.enviar_botao_link(
                     msg.telefono, respuesta, link_botao["texto_botao"], link_botao["url"]
                 )
             elif opcoes:
                 await proveedor.enviar_botoes(msg.telefono, respuesta, opcoes)
+            elif primeira_mensagem:
+                await proveedor.enviar_imagem_url(msg.telefono, LOGO_URL, respuesta)
             else:
                 await proveedor.enviar_mensaje(msg.telefono, respuesta)
 

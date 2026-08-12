@@ -137,6 +137,28 @@ class ProveedorMeta(ProveedorWhatsApp):
                 logger.error(f"Error Meta API: {r.status_code} — {r.text}")
             return r.status_code == 200
 
+    async def enviar_imagem_url(self, telefono: str, url_imagem: str, legenda: str = "") -> bool:
+        """Envía uma imagem a partir de um URL público, com legenda (ex: logótipo + boas-vindas)."""
+        if not self.access_token or not self.phone_number_id:
+            logger.warning("META_ACCESS_TOKEN o META_PHONE_NUMBER_ID no configurados")
+            return False
+        url = f"https://graph.facebook.com/{self.api_version}/{self.phone_number_id}/messages"
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": telefono,
+            "type": "image",
+            "image": {"link": url_imagem, "caption": legenda},
+        }
+        async with httpx.AsyncClient() as client:
+            r = await client.post(url, json=payload, headers=headers)
+            if r.status_code != 200:
+                logger.error(f"Error Meta API (imagem): {r.status_code} — {r.text}")
+            return r.status_code == 200
+
     async def enviar_botoes(self, telefono: str, texto: str, opcoes: list[str]) -> bool:
         """Envía una pregunta con até 3 botões de resposta rápida (WhatsApp Interactive Buttons)."""
         if not self.access_token or not self.phone_number_id:
