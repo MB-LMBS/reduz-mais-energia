@@ -38,6 +38,13 @@ SIMULADORES = {
         ),
         "texto_botao": "Ver simulador EE",
     },
+    "eletricidade_personalizada": {
+        "url": (
+            "https://reduz-mais-energia.neocities.org/Reduz+%20Energia/"
+            "Simuladores%20Energia/EE_Personalizado"
+        ),
+        "texto_botao": "Pedido personalizado",
+    },
 }
 
 # Herramientas que el modelo puede activar durante la conversación
@@ -135,10 +142,15 @@ HERRAMIENTAS = [
             "simulador com o cliente. Mostra um botão clicável em vez de "
             "escreveres o link em texto — mais fácil de abrir a partir do "
             "WhatsApp no telemóvel. Escolhe o tipo consoante o caso: "
-            "'eletricidade_btn' quando o cliente procura uma proposta de "
-            "eletricidade com nível de tensão BTN e já sabes a potência "
-            "contratada; 'geral' para todos os outros casos (gás, solar, ou "
-            "quando ainda não sabes a potência/nível de tensão do cliente)."
+            "'eletricidade_btn' quando o cliente (particular ou empresa) "
+            "procura eletricidade com nível de tensão BTN e já sabes a "
+            "potência contratada (uma das potências normais — ver secção "
+            "'Propostas de eletricidade' no teu contexto); "
+            "'eletricidade_personalizada' só para EMPRESA, quando a "
+            "potência/tensão são das gamas mais altas que exigem proposta à "
+            "medida (ver a mesma secção); 'geral' para todos os outros "
+            "casos (gás, solar, ou quando ainda não sabes a potência/nível "
+            "de tensão do cliente)."
         ),
         "input_schema": {
             "type": "object",
@@ -152,7 +164,7 @@ HERRAMIENTAS = [
                 },
                 "tipo": {
                     "type": "string",
-                    "enum": ["geral", "eletricidade_btn"],
+                    "enum": ["geral", "eletricidade_btn", "eletricidade_personalizada"],
                     "description": "Qual simulador mostrar — ver descrição da ferramenta.",
                 },
             },
