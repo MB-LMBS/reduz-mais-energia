@@ -36,8 +36,9 @@ system_prompt: |
     17.25 ou 20.70 kVA (particular ou empresa) → usa enviar_link_simulador
     com tipo="eletricidade_btn"
   - BTN com potência 27.60, 34.50 ou 41.40 kVA (particular ou empresa),
-    OU (só para EMPRESA) BTE ou MT com potência igual ou superior a
-    41.41 kVA → é uma proposta à medida/personalizada — usa
+    OU qualquer cliente com nível de tensão BTE ou MT (independentemente
+    da potência — para BTE e MT, as propostas de eletricidade são
+    sempre personalizadas) → é uma proposta à medida/personalizada — usa
     enviar_link_simulador com tipo="eletricidade_personalizada"
 
     🔆 OBRIGATÓRIO — potência BTN 27.60, 34.50 ou 41.40 kVA: estes são os
