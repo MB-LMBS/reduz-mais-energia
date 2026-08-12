@@ -231,6 +231,9 @@ HERRAMIENTAS = [
             },
             "required": ["mensagem"],
         },
+        # Marca o fim do bloco de ferramentas para o cache de prompt da Anthropic —
+        # a lista é estática entre pedidos, por isso vale a pena cachear.
+        "cache_control": {"type": "ephemeral"},
     },
 ]
 
@@ -331,13 +334,23 @@ def obtener_contexto_cliente(nome_contato: str | None, primeira_mensagem: bool) 
     return "\n".join(linhas)
 
 
-async def cargar_system_prompt(nome_contato: str | None, primeira_mensagem: bool) -> str:
-    """Lee el system prompt desde config/prompts.yaml, con contexto dinámico añadido."""
+async def montar_system_blocks(nome_contato: str | None, primeira_mensagem: bool) -> list[dict]:
+    """
+    Monta o system prompt em dois blocos, para aproveitar o cache de prompt da
+    Anthropic: a base de conhecimento (config/prompts.yaml, ~11 mil tokens,
+    igual em todos os pedidos) fica marcada com cache_control e é reutilizada
+    entre chamadas; o contexto dinâmico (hora atual, cliente, horários livres
+    de chamada) muda a cada pedido, por isso fica fora do bloco cacheado.
+    """
     config = cargar_config_prompts()
     base = config.get("system_prompt", "Eres un asistente útil. Responde en español.")
     contexto_agenda = await obtener_contexto_agenda()
     contexto_cliente = obtener_contexto_cliente(nome_contato, primeira_mensagem)
-    return base + obtener_contexto_temporal() + contexto_cliente + contexto_agenda
+    contexto_dinamico = obtener_contexto_temporal() + contexto_cliente + contexto_agenda
+    return [
+        {"type": "text", "text": base, "cache_control": {"type": "ephemeral"}},
+        {"type": "text", "text": contexto_dinamico},
+    ]
 
 
 def obtener_mensaje_error() -> str:
@@ -441,7 +454,7 @@ async def generar_respuesta(
     if not mensaje or len(mensaje.strip()) < 2:
         return obtener_mensaje_fallback(), False, None, None, None, None, None
 
-    system_prompt = await cargar_system_prompt(nome_contato, primeira_mensagem=not historial)
+    system_blocks = await montar_system_blocks(nome_contato, primeira_mensagem=not historial)
 
     # Construir mensajes para la API — "humano" (respuestas manuales desde /admin)
     # se envía como "assistant", Claude solo conoce esos dos roles
@@ -473,7 +486,7 @@ async def generar_respuesta(
         response = await client.messages.create(
             model="claude-sonnet-4-6",
             max_tokens=1024,
-            system=system_prompt,
+            system=system_blocks,
             tools=HERRAMIENTAS,
             messages=mensajes
         )
@@ -557,13 +570,17 @@ async def generar_respuesta(
             response = await client.messages.create(
                 model="claude-sonnet-4-6",
                 max_tokens=1024,
-                system=system_prompt,
+                system=system_blocks,
                 tools=HERRAMIENTAS,
                 messages=mensajes
             )
 
         texto = next((b.text for b in response.content if b.type == "text"), "")
-        logger.info(f"Respuesta generada ({response.usage.input_tokens} in / {response.usage.output_tokens} out)")
+        logger.info(
+            f"Respuesta generada ({response.usage.input_tokens} in / {response.usage.output_tokens} out / "
+            f"{response.usage.cache_read_input_tokens or 0} cache_read / "
+            f"{response.usage.cache_creation_input_tokens or 0} cache_write)"
+        )
         return texto, escalar, agendamento, None, None, motivo_escalada, None
 
     except Exception as e:
