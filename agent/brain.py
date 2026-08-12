@@ -181,8 +181,13 @@ HERRAMIENTAS = [
                 "mensagem": {
                     "type": "string",
                     "description": (
-                        "Texto curto a acompanhar o botão (ex: convite a "
-                        "consultar as opções e campanhas disponíveis)."
+                        "Texto a acompanhar o botão — não seja demasiado "
+                        "curto nem seco. Dá ao cliente contexto suficiente "
+                        "para se situar: o que é este simulador/pedido "
+                        "específico, o que vai encontrar ou preencher ao "
+                        "clicar (ex: dados que lhe vão pedir, ou as opções "
+                        "que vai poder comparar), e o que pode fazer a "
+                        "seguir. 2-3 frases é normalmente o ideal."
                     ),
                 },
                 "tipo": {
