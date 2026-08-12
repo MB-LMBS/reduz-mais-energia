@@ -45,6 +45,13 @@ SIMULADORES = {
         ),
         "texto_botao": "Pedido personalizado",
     },
+    "gas_natural": {
+        "url": (
+            "https://reduz-mais-energia.neocities.org/Reduz+%20Energia/"
+            "Simuladores%20Energia/GN_Campanhas"
+        ),
+        "texto_botao": "Ver simulador GN",
+    },
 }
 
 # Herramientas que el modelo puede activar durante la conversación
@@ -148,9 +155,11 @@ HERRAMIENTAS = [
             "'Propostas de eletricidade' no teu contexto); "
             "'eletricidade_personalizada' só para EMPRESA, quando a "
             "potência/tensão são das gamas mais altas que exigem proposta à "
-            "medida (ver a mesma secção); 'geral' para todos os outros "
-            "casos (gás, solar, ou quando ainda não sabes a potência/nível "
-            "de tensão do cliente)."
+            "medida (ver a mesma secção); 'gas_natural' quando o cliente "
+            "(particular ou empresa) procura gás natural, em qualquer "
+            "escalão (1, 2, 3 ou 4); 'geral' para todos os outros casos "
+            "(solar, ou quando ainda não sabes a potência/nível de tensão "
+            "do cliente para eletricidade)."
         ),
         "input_schema": {
             "type": "object",
@@ -164,7 +173,7 @@ HERRAMIENTAS = [
                 },
                 "tipo": {
                     "type": "string",
-                    "enum": ["geral", "eletricidade_btn", "eletricidade_personalizada"],
+                    "enum": ["geral", "eletricidade_btn", "eletricidade_personalizada", "gas_natural"],
                     "description": "Qual simulador mostrar — ver descrição da ferramenta.",
                 },
             },
