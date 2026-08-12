@@ -39,7 +39,10 @@ from agent.outlook_calendar import (
     outlook_configurado, esta_ligado as outlook_esta_ligado,
     gerar_url_autorizacao, concluir_autorizacao,
 )
-from agent.feriados import feriado_de_hoje, proximos_feriados
+from agent.feriados import (
+    feriado_de_hoje, proximos_feriados, nome_dia_semana,
+    feriados_municipais_de_hoje, proximo_feriado_municipal,
+)
 
 logger = logging.getLogger("agentkit")
 router = APIRouter(prefix="/admin")
@@ -98,6 +101,11 @@ ESTILO = """
   .feriados-info { text-align: right; font-size: 0.82rem; color: var(--texto-secundario); line-height: 1.5; }
   .feriados-info .feriado-hoje { color: var(--vermelho); font-weight: 700; display: block; }
   .feriados-info .feriado-proximo strong { color: var(--texto); }
+  .feriados-info .feriado-municipal { display: block; }
+  .tag-tipo { font-size: 0.68rem; padding: 1px 7px; border-radius: 8px; border: 1px solid var(--borda);
+              margin-left: 4px; white-space: nowrap; }
+  .tag-tipo.nacional { color: var(--verde); border-color: var(--verde); }
+  .tag-tipo.local { color: var(--azul); border-color: var(--azul); }
   .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
   .tabs a { flex: 1; text-align: center; padding: 10px; border-radius: 10px; background: var(--fundo-card);
             color: var(--texto-secundario); font-size: 0.9rem; font-weight: 500; box-shadow: var(--sombra);
@@ -280,20 +288,46 @@ def _swatches_tema_html() -> str:
     )
 
 
+def _formatar_concelhos(concelhos: list[str], limite: int = 6) -> str:
+    """Formata uma lista de concelhos para exibição, cortando se for muito longa."""
+    if len(concelhos) <= limite:
+        return ", ".join(concelhos)
+    return ", ".join(concelhos[:limite]) + f" e mais {len(concelhos) - limite}"
+
+
 def _relogio_feriados_html() -> str:
     """Cartão com relógio digital (hora/dia atualizados em tempo real) e feriados atuais/próximos."""
     hoje = datetime.now(ZoneInfo("Europe/Lisbon")).date()
     feriado_hoje = feriado_de_hoje(hoje)
+    concelhos_hoje = feriados_municipais_de_hoje(hoje)
 
     partes_feriados = ""
     if feriado_hoje:
-        partes_feriados += f'<span class="feriado-hoje">🎉 Hoje é feriado — {html.escape(feriado_hoje)}</span>'
+        partes_feriados += (
+            f'<span class="feriado-hoje">🎉 Hoje é feriado — {html.escape(feriado_hoje)} '
+            f'<span class="tag-tipo nacional">Nacional</span></span>'
+        )
+    if concelhos_hoje:
+        partes_feriados += (
+            f'<span class="feriado-municipal">🏛️ Feriado municipal hoje '
+            f'<span class="tag-tipo local">Local</span> — {html.escape(_formatar_concelhos(concelhos_hoje))}</span>'
+        )
+
     for data_f, nome_f in proximos_feriados(hoje, quantidade=2 if feriado_hoje else 3):
         if data_f == hoje:
             continue
         partes_feriados += (
-            f'<span class="feriado-proximo">{data_f.strftime("%d/%m")} — '
-            f'<strong>{html.escape(nome_f)}</strong></span><br>'
+            f'<span class="feriado-proximo">{nome_dia_semana(data_f)}, {data_f.strftime("%d/%m")} — '
+            f'<strong>{html.escape(nome_f)}</strong> <span class="tag-tipo nacional">Nacional</span></span><br>'
+        )
+
+    proximo_municipal = proximo_feriado_municipal(hoje)
+    if proximo_municipal:
+        data_m, concelhos_m = proximo_municipal
+        partes_feriados += (
+            f'<span class="feriado-proximo">{nome_dia_semana(data_m)}, {data_m.strftime("%d/%m")} — '
+            f'<strong>Feriado municipal</strong> <span class="tag-tipo local">Local</span> — '
+            f'{html.escape(_formatar_concelhos(concelhos_m))}</span><br>'
         )
 
     return f"""

@@ -1,12 +1,19 @@
-# agent/feriados.py — Feriados nacionais obrigatórios de Portugal
+# agent/feriados.py — Feriados nacionais e municipais de Portugal
 # Generado por AgentKit
 
 """
 Calcula os feriados nacionais obrigatórios de Portugal para um dado ano,
 incluindo os móveis (baseados na Páscoa), e permite consultar os próximos.
+Também cruza com os feriados municipais (facultativos) dos concelhos de
+Portugal Continental, definidos em agent/feriados_municipais.py.
 """
 
 from datetime import date, timedelta
+
+from agent.feriados_municipais import FERIADOS_MUNICIPAIS_FIXOS, FERIADOS_MUNICIPAIS_MOVEIS
+
+DIAS_SEMANA = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira",
+               "Sexta-feira", "Sábado", "Domingo"]
 
 NOMES_FERIADOS_FIXOS = {
     (1, 1): "Ano Novo",
@@ -63,3 +70,41 @@ def feriado_de_hoje(hoje: date | None = None) -> str | None:
     """Retorna o nome do feriado, se hoje for feriado nacional em Portugal, ou None."""
     hoje = hoje or date.today()
     return feriados_do_ano(hoje.year).get(hoje)
+
+
+def nome_dia_semana(dia: date) -> str:
+    """Nome do dia da semana em português, ex: 'Sexta-feira'."""
+    return DIAS_SEMANA[dia.weekday()]
+
+
+def _resolver_regra_movel(ano: int, regra: str) -> date:
+    """Resolve uma regra de feriado móvel (ex: 'pascoa+39') para uma data de um ano."""
+    deslocamento = int(regra.split("+")[1])
+    return _pascoa(ano) + timedelta(days=deslocamento)
+
+
+def feriados_municipais_do_ano(ano: int) -> dict[date, list[str]]:
+    """Retorna {data: [concelhos]} com todos os feriados municipais do ano, em Portugal Continental."""
+    por_data: dict[date, list[str]] = {}
+    for concelho, (mes, dia) in FERIADOS_MUNICIPAIS_FIXOS.items():
+        por_data.setdefault(date(ano, mes, dia), []).append(concelho)
+    for concelho, regra in FERIADOS_MUNICIPAIS_MOVEIS.items():
+        por_data.setdefault(_resolver_regra_movel(ano, regra), []).append(concelho)
+    for concelhos in por_data.values():
+        concelhos.sort()
+    return por_data
+
+
+def feriados_municipais_de_hoje(hoje: date | None = None) -> list[str]:
+    """Retorna a lista de concelhos (Portugal Continental) em feriado municipal hoje."""
+    hoje = hoje or date.today()
+    return feriados_municipais_do_ano(hoje.year).get(hoje, [])
+
+
+def proximo_feriado_municipal(hoje: date | None = None) -> tuple[date, list[str]] | None:
+    """Retorna (data, [concelhos]) do próximo dia com pelo menos um feriado municipal,
+    a partir de hoje (exclui hoje — usar feriados_municipais_de_hoje para o próprio dia)."""
+    hoje = hoje or date.today()
+    todos = {**feriados_municipais_do_ano(hoje.year), **feriados_municipais_do_ano(hoje.year + 1)}
+    futuros = sorted((d, concelhos) for d, concelhos in todos.items() if d > hoje)
+    return futuros[0] if futuros else None
