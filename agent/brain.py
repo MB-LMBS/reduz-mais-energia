@@ -162,9 +162,10 @@ HERRAMIENTAS = [
             "procura eletricidade com nível de tensão BTN e já sabes a "
             "potência contratada (uma das potências normais — ver secção "
             "'Propostas de eletricidade' no teu contexto); "
-            "'eletricidade_personalizada' só para EMPRESA, quando a "
-            "potência/tensão são das gamas mais altas que exigem proposta à "
-            "medida (ver a mesma secção); 'gas_natural' quando o cliente "
+            "'eletricidade_personalizada' quando a potência/tensão são das "
+            "gamas mais altas que exigem proposta à medida (ver a mesma "
+            "secção — inclui uma nota importante sobre oferecer solar "
+            "nestes casos); 'gas_natural' quando o cliente "
             "(particular ou empresa) procura gás natural, em qualquer "
             "escalão (1, 2, 3 ou 4); 'solar_fotovoltaico' quando o cliente "
             "(particular ou empresa) procura uma solução solar fotovoltaica "
@@ -197,6 +198,15 @@ HERRAMIENTAS = [
                         "gas_natural", "solar_fotovoltaico",
                     ],
                     "description": "Qual simulador mostrar — ver descrição da ferramenta.",
+                },
+                "nivel_tensao": {
+                    "type": "string",
+                    "enum": ["BTN", "BTE", "MT"],
+                    "description": (
+                        "Só quando tipo='eletricidade_btn' ou "
+                        "'eletricidade_personalizada': o nível de tensão do "
+                        "cliente. Obrigatório nesses dois casos."
+                    ),
                 },
             },
             "required": ["mensagem", "tipo"],
@@ -503,7 +513,19 @@ async def generar_respuesta(
                     mensagem_link = (tool_use.input.get("mensagem") or "").strip() or \
                         "Veja as opções e campanhas disponíveis:"
                     tipo_simulador = tool_use.input.get("tipo") or "geral"
+                    nivel_tensao_cliente = (tool_use.input.get("nivel_tensao") or "").strip().upper()
                     simulador = SIMULADORES.get(tipo_simulador, SIMULADORES["geral"])
+                    # Garantido em código (não só no prompt): estes escalões BTN são os
+                    # que mais poupam com solar — nunca deixar passar sem mencionar,
+                    # seja particular ou empresa
+                    if tipo_simulador == "eletricidade_personalizada" and nivel_tensao_cliente == "BTN":
+                        mensagem_link += (
+                            "\n\n☀️ Já agora — com esta potência, o seu perfil é dos que "
+                            "mais poupa com uma solução solar fotovoltaica, porque as "
+                            "tarifas de rede nestes escalões são muito elevadas. Tem "
+                            "área disponível (cobertura, solo ou estacionamento) para "
+                            "a instalação de painéis solares?"
+                        )
                     texto_curto_circuito = mensagem_link
                     link_botao = {"texto_botao": simulador["texto_botao"], "url": simulador["url"]}
                     resultado_texto = f"Botão do simulador ({tipo_simulador}) mostrado ao cliente."
