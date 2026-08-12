@@ -146,12 +146,40 @@ async def obtener_contexto_agenda() -> str:
     )
 
 
-async def cargar_system_prompt() -> str:
+def obtener_contexto_cliente(nome_contato: str | None, primeira_mensagem: bool) -> str:
+    """
+    Genera un bloque con el nombre del cliente actual (si se conoce) y si esta es
+    su primera mensaje de la conversación, para saludar de forma cálida y personal.
+    """
+    linhas = ["\n\n## Cliente atual"]
+    if nome_contato:
+        linhas.append(
+            f"O nome de perfil de WhatsApp deste cliente é {nome_contato}. Trata-o "
+            "pelo nome sempre que fizer sentido, para tornar a conversa mais "
+            "pessoal e calorosa."
+        )
+    else:
+        linhas.append("Ainda não sabes o nome deste cliente — podes perguntar-lho com naturalidade.")
+
+    if primeira_mensagem:
+        linhas.append(
+            "Esta é a primeira mensagem desta conversa. Cumprimenta com calor, dá "
+            "as boas-vindas à Reduz+ Energia, e só depois respondas ao que o "
+            "cliente disse — nunca respondas com uma mensagem seca ou demasiado curta."
+        )
+    else:
+        linhas.append("Já estão a meio de uma conversa — não repitas as boas-vindas, continua naturalmente.")
+
+    return "\n".join(linhas)
+
+
+async def cargar_system_prompt(nome_contato: str | None, primeira_mensagem: bool) -> str:
     """Lee el system prompt desde config/prompts.yaml, con contexto dinámico añadido."""
     config = cargar_config_prompts()
     base = config.get("system_prompt", "Eres un asistente útil. Responde en español.")
     contexto_agenda = await obtener_contexto_agenda()
-    return base + obtener_contexto_temporal() + contexto_agenda
+    contexto_cliente = obtener_contexto_cliente(nome_contato, primeira_mensagem)
+    return base + obtener_contexto_temporal() + contexto_cliente + contexto_agenda
 
 
 def obtener_mensaje_error() -> str:
@@ -226,7 +254,9 @@ async def _processar_agendamento(entrada: dict, telefono: str) -> tuple[str, dic
     )
 
 
-async def generar_respuesta(mensaje: str, historial: list[dict], telefono: str) -> tuple[str, bool, dict | None]:
+async def generar_respuesta(
+    mensaje: str, historial: list[dict], telefono: str, nome_contato: str | None = None
+) -> tuple[str, bool, dict | None]:
     """
     Genera una respuesta usando Claude API.
 
@@ -234,6 +264,7 @@ async def generar_respuesta(mensaje: str, historial: list[dict], telefono: str) 
         mensaje: El mensaje nuevo del usuario
         historial: Lista de mensajes anteriores [{"role": "user/assistant/humano", "content": "..."}]
         telefono: Número de teléfono del cliente (necesario para agendar chamadas)
+        nome_contato: Nombre de perfil de WhatsApp del cliente, si se conoce
 
     Returns:
         Tupla (respuesta, escalar_a_consultor, agendamento) — escalar_a_consultor es
@@ -244,7 +275,7 @@ async def generar_respuesta(mensaje: str, historial: list[dict], telefono: str) 
     if not mensaje or len(mensaje.strip()) < 2:
         return obtener_mensaje_fallback(), False, None
 
-    system_prompt = await cargar_system_prompt()
+    system_prompt = await cargar_system_prompt(nome_contato, primeira_mensagem=not historial)
 
     # Construir mensajes para la API — "humano" (respuestas manuales desde /admin)
     # se envía como "assistant", Claude solo conoce esos dos roles

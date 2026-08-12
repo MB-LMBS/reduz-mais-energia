@@ -18,7 +18,7 @@ from dotenv import load_dotenv
 from agent.brain import generar_respuesta
 from agent.memory import (
     inicializar_db, guardar_mensaje, obtener_historial, obtener_modo, establecer_modo,
-    establecer_nome_contato,
+    establecer_nome_contato, obtener_nome_contato,
 )
 from agent.providers import obtener_proveedor
 from agent.notificacoes import notificar_consultor, notificar_agendamento
@@ -112,6 +112,7 @@ async def webhook_handler(request: Request):
             # Guardamos el nombre de perfil de WhatsApp del contacto, si vino informado
             if msg.nome_contato:
                 await establecer_nome_contato(msg.telefono, msg.nome_contato)
+            nome_contato = msg.nome_contato or await obtener_nome_contato(msg.telefono)
 
             # Si el mensaje trae un archivo (imagen, PDF, etc.), lo descargamos
             # y guardamos localmente para poder verlo desde /admin
@@ -142,7 +143,9 @@ async def webhook_handler(request: Request):
             historial = await obtener_historial(msg.telefono)
 
             # Generar respuesta con Claude
-            respuesta, escalar, agendamento = await generar_respuesta(texto_para_ia, historial, msg.telefono)
+            respuesta, escalar, agendamento = await generar_respuesta(
+                texto_para_ia, historial, msg.telefono, nome_contato
+            )
 
             # Guardar mensaje del usuario Y respuesta del agente en memoria
             await guardar_mensaje(
