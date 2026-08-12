@@ -182,7 +182,7 @@ async def webhook_handler(request: Request):
             historial = await obtener_historial(msg.telefono)
 
             # Generar respuesta con Claude
-            respuesta, escalar, agendamento = await generar_respuesta(
+            respuesta, escalar, agendamento, opcoes = await generar_respuesta(
                 texto_para_ia, historial, msg.telefono, nome_contato
             )
 
@@ -193,8 +193,12 @@ async def webhook_handler(request: Request):
             )
             await guardar_mensaje(msg.telefono, "assistant", respuesta)
 
-            # Enviar respuesta por WhatsApp via el proveedor
-            await proveedor.enviar_mensaje(msg.telefono, respuesta)
+            # Enviar respuesta por WhatsApp via el proveedor — com botões de
+            # resposta rápida quando o agente ofereceu opções simples
+            if opcoes:
+                await proveedor.enviar_botoes(msg.telefono, respuesta, opcoes)
+            else:
+                await proveedor.enviar_mensaje(msg.telefono, respuesta)
 
             logger.info(f"Respuesta a {msg.telefono}: {respuesta}")
 

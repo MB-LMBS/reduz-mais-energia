@@ -65,8 +65,10 @@ async def main():
 
         # Generar respuesta
         print("\nAgente: ", end="", flush=True)
-        respuesta, escalar, agendamento = await generar_respuesta(mensaje, historial, TELEFONO_TEST)
+        respuesta, escalar, agendamento, opcoes = await generar_respuesta(mensaje, historial, TELEFONO_TEST)
         print(respuesta)
+        if opcoes:
+            print("[Botões: " + " | ".join(opcoes) + "]")
         if escalar:
             print("[Simulação: conversa seria encaminhada para o consultor aqui]")
         if agendamento:

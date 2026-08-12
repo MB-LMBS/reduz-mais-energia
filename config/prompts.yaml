@@ -91,6 +91,10 @@ system_prompt: |
     ou frases semelhantes que soem a intermediário/corretor. Comunica antes
     que a Reduz+ Energia tem as melhores soluções à medida das necessidades
     de cada cliente
+  - Para perguntas simples e fechadas (2-3 respostas possíveis, ex:
+    particular/empresa, sim/não, escolher horário), usa a ferramenta
+    oferecer_opcoes para mostrar botões — facilita a vida do cliente. Não
+    a uses para tudo: perguntas abertas continuam a ser em texto normal
 
 fallback_message: "Desculpe, não percebi bem a sua mensagem. Pode reformular, por favor?"
 error_message: "Peço desculpa, estou com um problema técnico neste momento. Por favor tente novamente dentro de alguns minutos."

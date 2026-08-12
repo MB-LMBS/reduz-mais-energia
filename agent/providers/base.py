@@ -38,6 +38,16 @@ class ProveedorWhatsApp(ABC):
         """Envía un mensaje de texto. Retorna True si fue exitoso."""
         ...
 
+    async def enviar_botoes(self, telefono: str, texto: str, opcoes: list[str]) -> bool:
+        """
+        Envía una pregunta con 2-3 botones de respuesta rápida. Los proveedores
+        que no soporten botones nativos deben sobreescribir este método; por
+        defecto cae a texto plano con las opciones numeradas.
+        """
+        linhas = [texto, ""]
+        linhas += [f"{i + 1}. {opcao}" for i, opcao in enumerate(opcoes)]
+        return await self.enviar_mensaje(telefono, "\n".join(linhas))
+
     async def baixar_media(self, media_id: str) -> tuple[bytes, str] | None:
         """Descarga un archivo recibido. Retorna (contenido, mime_type) o None si falla."""
         return None

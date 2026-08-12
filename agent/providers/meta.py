@@ -66,6 +66,18 @@ class ProveedorMeta(ProveedorWhatsApp):
                             es_propio=False,
                             nome_contato=nome_contato,
                         ))
+                    elif tipo_meta == "interactive":
+                        # Resposta a uma mensagem com botões ou lista — tratamos o
+                        # título escolhido como se o cliente o tivesse escrito
+                        interactive = msg.get("interactive", {})
+                        escolha = interactive.get("button_reply") or interactive.get("list_reply") or {}
+                        mensajes.append(MensajeEntrante(
+                            telefono=msg.get("from", ""),
+                            texto=escolha.get("title", ""),
+                            mensaje_id=msg.get("id", ""),
+                            es_propio=False,
+                            nome_contato=nome_contato,
+                        ))
                     elif tipo_meta in TIPOS_MEDIA:
                         dados_media = msg.get(tipo_meta, {})
                         mensajes.append(MensajeEntrante(
@@ -123,6 +135,36 @@ class ProveedorMeta(ProveedorWhatsApp):
             r = await client.post(url, json=payload, headers=headers)
             if r.status_code != 200:
                 logger.error(f"Error Meta API: {r.status_code} — {r.text}")
+            return r.status_code == 200
+
+    async def enviar_botoes(self, telefono: str, texto: str, opcoes: list[str]) -> bool:
+        """Envía una pregunta con até 3 botões de resposta rápida (WhatsApp Interactive Buttons)."""
+        if not self.access_token or not self.phone_number_id:
+            logger.warning("META_ACCESS_TOKEN o META_PHONE_NUMBER_ID no configurados")
+            return False
+        url = f"https://graph.facebook.com/{self.api_version}/{self.phone_number_id}/messages"
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json",
+        }
+        botoes = [
+            {"type": "reply", "reply": {"id": f"opt_{i}", "title": opcao[:20]}}
+            for i, opcao in enumerate(opcoes[:3])
+        ]
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": telefono,
+            "type": "interactive",
+            "interactive": {
+                "type": "button",
+                "body": {"text": texto},
+                "action": {"buttons": botoes},
+            },
+        }
+        async with httpx.AsyncClient() as client:
+            r = await client.post(url, json=payload, headers=headers)
+            if r.status_code != 200:
+                logger.error(f"Error Meta API (botões): {r.status_code} — {r.text}")
             return r.status_code == 200
 
     async def enviar_documento(

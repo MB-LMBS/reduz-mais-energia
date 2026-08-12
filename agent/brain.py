@@ -80,6 +80,37 @@ HERRAMIENTAS = [
             "required": ["data", "hora", "nome", "informacao"],
         },
     },
+    {
+        "name": "oferecer_opcoes",
+        "description": (
+            "Usa esta ferramenta quando quiseres fazer uma pergunta simples e "
+            "fechada, com 2 ou 3 respostas possíveis (ex: 'É para uso "
+            "particular ou empresa?', 'Confirma estes dados?', escolher entre "
+            "2-3 horários de chamada). Mostra botões clicáveis ao cliente no "
+            "WhatsApp — mais rápido e fácil do que escrever. NÃO uses para "
+            "perguntas abertas que precisem de texto livre (ex: pedir o "
+            "nome, pedir para descrever o que procura), e não abuses disto "
+            "em todas as mensagens — só quando facilitar mesmo a escolha do "
+            "cliente."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "pergunta": {
+                    "type": "string",
+                    "description": "O texto da pergunta a mostrar ao cliente, acima dos botões.",
+                },
+                "opcoes": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "minItems": 2,
+                    "maxItems": 3,
+                    "description": "Entre 2 e 3 respostas curtas (máx. 20 caracteres cada) para o cliente escolher.",
+                },
+            },
+            "required": ["pergunta", "opcoes"],
+        },
+    },
 ]
 
 DIAS_SEMANA = ["segunda-feira", "terça-feira", "quarta-feira", "quinta-feira",
@@ -259,7 +290,7 @@ async def _processar_agendamento(entrada: dict, telefono: str) -> tuple[str, dic
 
 async def generar_respuesta(
     mensaje: str, historial: list[dict], telefono: str, nome_contato: str | None = None
-) -> tuple[str, bool, dict | None]:
+) -> tuple[str, bool, dict | None, list[str] | None]:
     """
     Genera una respuesta usando Claude API.
 
@@ -270,13 +301,15 @@ async def generar_respuesta(
         nome_contato: Nombre de perfil de WhatsApp del cliente, si se conoce
 
     Returns:
-        Tupla (respuesta, escalar_a_consultor, agendamento) — escalar_a_consultor es
-        True si el cliente pidió/aceptó hablar con un consultor humano; agendamento
-        es None o un dict con los detalles de una chamada recién marcada.
+        Tupla (respuesta, escalar_a_consultor, agendamento, opcoes) — escalar_a_consultor
+        es True si el cliente pidió/aceptó hablar con un consultor humano; agendamento
+        es None o un dict con los detalles de una chamada recién marcada; opcoes es
+        None (mensaje de texto normal) o una lista de 2-3 respostas curtas para
+        mostrar como botões em vez de texto.
     """
     # Si el mensaje es muy corto o vacío, usar fallback
     if not mensaje or len(mensaje.strip()) < 2:
-        return obtener_mensaje_fallback(), False, None
+        return obtener_mensaje_fallback(), False, None, None
 
     system_prompt = await cargar_system_prompt(nome_contato, primeira_mensagem=not historial)
 
@@ -301,6 +334,7 @@ async def generar_respuesta(
 
     escalar = False
     agendamento = None
+    opcoes = None
 
     try:
         response = await client.messages.create(
@@ -314,6 +348,7 @@ async def generar_respuesta(
         # Ciclo de tool-use: el modelo puede activar una o varias herramientas
         # antes de dar la respuesta final al cliente (con un límite de seguridad)
         intentos = 0
+        texto_opcoes = None
         while response.stop_reason == "tool_use" and intentos < 4:
             intentos += 1
             tool_blocks = [b for b in response.content if b.type == "tool_use"]
@@ -329,6 +364,17 @@ async def generar_respuesta(
                     resultado_texto, dados = await _processar_agendamento(tool_use.input, telefono)
                     if dados:
                         agendamento = dados
+                elif tool_use.name == "oferecer_opcoes":
+                    pergunta = (tool_use.input.get("pergunta") or "").strip()
+                    opcoes_validas = [
+                        str(o).strip()[:20] for o in (tool_use.input.get("opcoes") or []) if str(o).strip()
+                    ][:3]
+                    if pergunta and len(opcoes_validas) >= 2:
+                        texto_opcoes = pergunta
+                        opcoes = opcoes_validas
+                        resultado_texto = "Opções mostradas ao cliente como botões."
+                    else:
+                        resultado_texto = "Pedido inválido (falta pergunta ou 2-3 opções) — responde em texto normal."
                 else:
                     resultado_texto = "Ferramenta desconhecida."
 
@@ -337,6 +383,12 @@ async def generar_respuesta(
                     "tool_use_id": tool_use.id,
                     "content": resultado_texto,
                 })
+
+            # Se as opções foram mostradas com sucesso, a própria pergunta já é
+            # a mensagem final — não pedimos mais um texto ao modelo por cima
+            if opcoes:
+                logger.info(f"Opções oferecidas ao cliente: {opcoes}")
+                return texto_opcoes, escalar, agendamento, opcoes
 
             mensajes.append({"role": "user", "content": resultados_tool})
             response = await client.messages.create(
@@ -349,8 +401,8 @@ async def generar_respuesta(
 
         texto = next((b.text for b in response.content if b.type == "text"), "")
         logger.info(f"Respuesta generada ({response.usage.input_tokens} in / {response.usage.output_tokens} out)")
-        return texto, escalar, agendamento
+        return texto, escalar, agendamento, None
 
     except Exception as e:
         logger.error(f"Error Claude API: {e}")
-        return obtener_mensaje_error(), False, None
+        return obtener_mensaje_error(), False, None, None
