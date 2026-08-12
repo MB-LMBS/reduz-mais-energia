@@ -84,6 +84,7 @@ ESTILO = """
   .msg.humano { background: #cfe8ff; margin-left: auto; }
   .msg img { max-width: 100%; border-radius: 8px; display: block; margin-bottom: 4px; }
   .msg .ficheiro { display: block; font-size: 0.85rem; }
+  .msg .remetente { display: block; font-size: 0.7rem; font-weight: 600; opacity: 0.55; margin-bottom: 2px; }
   .msg .hora { display: block; font-size: 0.7rem; color: #999; margin-top: 3px; text-align: right; }
   .msg-acoes { display: flex; gap: 10px; justify-content: flex-end; margin-top: 4px; }
   .msg-acoes summary, .msg-acoes .btn-apagar { font-size: 0.75rem; color: #666; cursor: pointer;
@@ -92,8 +93,7 @@ ESTILO = """
   .form-editar { display: flex; gap: 6px; margin-top: 6px; }
   .form-editar textarea { flex: 1; padding: 6px; border-radius: 6px; border: 1px solid #ccc; resize: none; }
   .form-editar button { padding: 0 10px; border-radius: 6px; border: none; background: #0a7d4f; color: white; }
-  form.reply { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; position: sticky; bottom: 0;
-               background: #f5f5f5; padding: 8px 0; }
+  form.reply { display: flex; flex-wrap: wrap; gap: 8px; }
   form.reply textarea { flex: 1; min-width: 140px; padding: 10px; border-radius: 8px; border: 1px solid #ccc;
                          resize: none; }
   form.reply button { padding: 0 16px; border-radius: 8px; border: none; background: #0a7d4f; color: white; }
@@ -125,6 +125,28 @@ ESTILO = """
   .agendamento .nome { font-weight: 600; }
   .agendamento .tel { color: #666; font-size: 0.85rem; }
   .agendamento .info { margin-top: 6px; font-size: 0.9rem; white-space: pre-wrap; }
+
+  /* Página de conversa: cabeçalho fixo no topo, mensagens com scroll próprio,
+     caixa de resposta fixa em baixo — como numa app de chat normal */
+  body.conversa-page { padding: 0; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+  .cabecalho-fixo { flex-shrink: 0; background: #f5f5f5; border-bottom: 1px solid #ddd;
+                     padding: 10px 12px; position: relative; z-index: 20; }
+  .cabecalho-linha { display: flex; align-items: center; gap: 10px; }
+  .cabecalho-linha .voltar { font-size: 1.2rem; flex-shrink: 0; }
+  .cabecalho-linha .avatar { width: 40px; height: 40px; font-size: 0.95rem; }
+  .cabecalho-info { flex: 1; min-width: 0; }
+  .cabecalho-info .nome { font-weight: 600; font-size: 1rem; white-space: nowrap; overflow: hidden;
+                           text-overflow: ellipsis; }
+  .cabecalho-info .tel { color: #666; font-size: 0.8rem; }
+  .opcoes { flex-shrink: 0; }
+  .opcoes summary { list-style: none; cursor: pointer; font-size: 1.4rem; padding: 2px 8px; }
+  .opcoes summary::-webkit-details-marker { display: none; }
+  .opcoes[open] summary { color: #0a7d4f; }
+  .opcoes-conteudo { position: absolute; right: 12px; top: 100%; background: white; border: 1px solid #ddd;
+                      border-radius: 10px; padding: 12px; margin-top: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                      min-width: 240px; max-width: calc(100vw - 24px); z-index: 30; }
+  .mensagens-scroll { flex: 1; overflow-y: auto; padding: 12px; }
+  .reply-fixa { flex-shrink: 0; background: #f5f5f5; border-top: 1px solid #ddd; padding: 8px 12px; }
 </style>
 """
 
@@ -339,10 +361,14 @@ def _linkificar(texto: str) -> str:
     return "".join(partes)
 
 
+ROTULOS_REMETENTE = {"user": "Cliente", "humano": "Você", "assistant": "Bot"}
+
+
 def _render_mensagem(msg: dict, telefono: str) -> str:
     """Gera o HTML de uma mensagem, incluindo pré-visualização de ficheiros e hora."""
     classe = "user" if msg["role"] == "user" else ("humano" if msg["role"] == "humano" else "assistant")
-    partes = ""
+    rotulo = ROTULOS_REMETENTE.get(msg["role"], "")
+    partes = f'<span class="remetente">{rotulo}</span>' if rotulo else ""
 
     if msg.get("media_path"):
         nome_arquivo = os.path.basename(msg["media_path"])
@@ -397,58 +423,66 @@ async def ver_conversa(telefono: str, auth: bool = Depends(verificar_password)):
     <html>
     <head><title>{html.escape(titulo_pagina)} — Reduz+ Energia</title>{ESTILO}
     <meta name="viewport" content="width=device-width, initial-scale=1"></head>
-    <body>
-      <a href="/admin/">&larr; Conversas</a>
-      <div class="cabecalho">
-        {_avatar_html(nome, telefono)}
-        <div>
-          <div class="nome">{html.escape(nome) if nome else html.escape(telefono)}</div>
-          {f'<div class="tel">{html.escape(telefono)}</div>' if nome else ''}
+    <body class="conversa-page">
+      <div class="cabecalho-fixo">
+        <div class="cabecalho-linha">
+          <a class="voltar" href="/admin/">&larr;</a>
+          {_avatar_html(nome, telefono)}
+          <div class="cabecalho-info">
+            <div class="nome">{html.escape(nome) if nome else html.escape(telefono)}</div>
+            {f'<div class="tel">{html.escape(telefono)}</div>' if nome else ''}
+          </div>
+          <details class="opcoes">
+            <summary>☰</summary>
+            <div class="opcoes-conteudo">
+              {f'''<form method="post" action="/admin/conversa/{telefono}/encaminhar"
+                     onsubmit="return confirm('Encaminhar esta conversa para o consultor Luis Sequeira ({NUMERO_CONSULTOR})?')">
+                <button type="submit" class="btn-consultor">📞 Encaminhar para consultor</button>
+              </form>''' if NUMERO_CONSULTOR else ''}
+
+              <div class="toggle">
+                <form method="post" action="/admin/conversa/{telefono}/modo">
+                  <input type="hidden" name="modo" value="bot">
+                  <button type="submit" class="{'ativo' if modo == 'bot' else ''}">Bot responde</button>
+                </form>
+                <form method="post" action="/admin/conversa/{telefono}/modo">
+                  <input type="hidden" name="modo" value="manual">
+                  <button type="submit" class="{'ativo' if modo == 'manual' else ''}">Eu respondo</button>
+                </form>
+                <form method="post" action="/admin/conversa/{telefono}/estado">
+                  <input type="hidden" name="estado" value="aberta">
+                  <button type="submit" class="{'ativo' if estado == 'aberta' else ''}">Em aberto</button>
+                </form>
+                <form method="post" action="/admin/conversa/{telefono}/estado">
+                  <input type="hidden" name="estado" value="tratada">
+                  <button type="submit" class="tratada {'ativo' if estado == 'tratada' else ''}">Tratada</button>
+                </form>
+              </div>
+
+              <div class="toggle separador">
+                {"".join(
+                    f'''<form method="post" action="/admin/conversa/{telefono}/categoria">
+                          <input type="hidden" name="categoria" value="{chave}">
+                          <button type="submit" class="{chave} {'ativo' if categoria == chave else ''}">{nome_cat}</button>
+                        </form>'''
+                    for chave, nome_cat in NOMES_CATEGORIA.items()
+                )}
+              </div>
+            </div>
+          </details>
         </div>
       </div>
 
-      {f'''<form method="post" action="/admin/conversa/{telefono}/encaminhar"
-             onsubmit="return confirm('Encaminhar esta conversa para o consultor Luis Sequeira ({NUMERO_CONSULTOR})?')">
-        <button type="submit" class="btn-consultor">📞 Encaminhar para consultor</button>
-      </form>''' if NUMERO_CONSULTOR else ''}
+      <div id="mensagens" class="mensagens-scroll">{mensagens_html}</div>
 
-      <div class="toggle">
-        <form method="post" action="/admin/conversa/{telefono}/modo">
-          <input type="hidden" name="modo" value="bot">
-          <button type="submit" class="{'ativo' if modo == 'bot' else ''}">Bot responde</button>
-        </form>
-        <form method="post" action="/admin/conversa/{telefono}/modo">
-          <input type="hidden" name="modo" value="manual">
-          <button type="submit" class="{'ativo' if modo == 'manual' else ''}">Eu respondo</button>
-        </form>
-        <form method="post" action="/admin/conversa/{telefono}/estado">
-          <input type="hidden" name="estado" value="aberta">
-          <button type="submit" class="{'ativo' if estado == 'aberta' else ''}">Em aberto</button>
-        </form>
-        <form method="post" action="/admin/conversa/{telefono}/estado">
-          <input type="hidden" name="estado" value="tratada">
-          <button type="submit" class="tratada {'ativo' if estado == 'tratada' else ''}">Tratada</button>
+      <div class="reply-fixa">
+        <form class="reply" method="post" action="/admin/conversa/{telefono}/responder" enctype="multipart/form-data">
+          <textarea name="texto" rows="2" placeholder="Escrever resposta..."
+                    onkeydown="if(event.key==='Enter' &amp;&amp; !event.shiftKey){{event.preventDefault(); this.form.requestSubmit();}}"></textarea>
+          <button type="submit">Enviar</button>
+          <input class="anexo" type="file" name="ficheiro">
         </form>
       </div>
-
-      <div class="toggle separador">
-        {"".join(
-            f'''<form method="post" action="/admin/conversa/{telefono}/categoria">
-                  <input type="hidden" name="categoria" value="{chave}">
-                  <button type="submit" class="{chave} {'ativo' if categoria == chave else ''}">{nome}</button>
-                </form>'''
-            for chave, nome in NOMES_CATEGORIA.items()
-        )}
-      </div>
-
-      <div id="mensagens">{mensagens_html}</div>
-
-      <form class="reply" method="post" action="/admin/conversa/{telefono}/responder" enctype="multipart/form-data">
-        <textarea name="texto" rows="2" placeholder="Escrever resposta..."
-                  onkeydown="if(event.key==='Enter' &amp;&amp; !event.shiftKey){{event.preventDefault(); this.form.requestSubmit();}}"></textarea>
-        <button type="submit">Enviar</button>
-        <input class="anexo" type="file" name="ficheiro">
-      </form>
 
       <script>
       (function() {{
@@ -456,7 +490,7 @@ async def ver_conversa(telefono: str, auth: bool = Depends(verificar_password)):
         var container = document.getElementById('mensagens');
 
         // Abre sempre já posicionado na mensagem mais recente
-        window.scrollTo(0, document.body.scrollHeight);
+        container.scrollTop = container.scrollHeight;
 
         function ultimoIdAtual() {{
           var nos = container.querySelectorAll('[data-msg-id]');
@@ -474,7 +508,7 @@ async def ver_conversa(telefono: str, auth: bool = Depends(verificar_password)):
             if (html.trim()) {{
               container.insertAdjacentHTML('beforeend', html);
               ultimoId = ultimoIdAtual();
-              window.scrollTo(0, document.body.scrollHeight);
+              container.scrollTop = container.scrollHeight;
             }}
           }} catch (e) {{}}
         }}
