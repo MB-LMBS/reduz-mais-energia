@@ -533,8 +533,8 @@ async def generar_respuesta(
 
         texto = next((b.text for b in response.content if b.type == "text"), "")
         logger.info(f"Respuesta generada ({response.usage.input_tokens} in / {response.usage.output_tokens} out)")
-        return texto, escalar, agendamento, None, None, motivo_escalada
+        return texto, escalar, agendamento, None, None, motivo_escalada, None
 
     except Exception as e:
         logger.error(f"Error Claude API: {e}")
-        return obtener_mensaje_error(), False, None, None, None, None
+        return obtener_mensaje_error(), False, None, None, None, None, None
