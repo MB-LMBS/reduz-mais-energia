@@ -39,6 +39,7 @@ from agent.outlook_calendar import (
     outlook_configurado, esta_ligado as outlook_esta_ligado,
     gerar_url_autorizacao, concluir_autorizacao,
 )
+from agent.feriados import feriado_de_hoje, proximos_feriados
 
 logger = logging.getLogger("agentkit")
 router = APIRouter(prefix="/admin")
@@ -54,22 +55,56 @@ ESTILO = """
 <style>
   :root {
     --verde: #0a7d4f; --verde-escuro: #086b43; --azul: #1d6fa5; --vermelho: #c0392b;
+    --fundo: #f2f3f5; --fundo-card: #ffffff; --texto: #1a1a1a; --texto-secundario: #666;
+    --borda: #e2e2e2;
     --sombra: 0 1px 3px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.05);
     --sombra-media: 0 4px 14px rgba(0,0,0,0.12);
+    --bolha-bot-1: #e3f9d5; --bolha-bot-2: #d4f4c0;
+    --bolha-humano-1: #d9ecff; --bolha-humano-2: #c9e3ff;
+  }
+  body.tema-azul {
+    --verde: #1d6fa5; --verde-escuro: #164f79;
+    --bolha-bot-1: #d9ecff; --bolha-bot-2: #c9e3ff;
+    --bolha-humano-1: #e3f9d5; --bolha-humano-2: #d4f4c0;
+  }
+  body.tema-escuro {
+    --fundo: #16181b; --fundo-card: #23262a; --texto: #eee; --texto-secundario: #9aa0a6;
+    --borda: #383c41;
+    --sombra: 0 1px 3px rgba(0,0,0,0.4); --sombra-media: 0 4px 16px rgba(0,0,0,0.55);
+    --bolha-bot-1: #1e3a2c; --bolha-bot-2: #234730;
+    --bolha-humano-1: #1c3550; --bolha-humano-2: #204066;
   }
   * { box-sizing: border-box; }
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; max-width: 640px;
-         margin: 0 auto; padding: 12px; background: #f2f3f5; color: #1a1a1a; }
+         margin: 0 auto; padding: 12px; background: var(--fundo); color: var(--texto);
+         transition: background 0.2s ease, color 0.2s ease; }
   h1 { font-size: 1.3rem; }
   a { color: var(--verde); text-decoration: none; }
   button { font-family: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .temas { display: flex; gap: 6px; align-items: center; }
+  .tema-swatch { width: 22px; height: 22px; border-radius: 50%; border: 2px solid transparent;
+                  padding: 0; transition: transform 0.12s ease, border-color 0.12s ease; }
+  .tema-swatch:hover { transform: scale(1.15); }
+  .tema-swatch.ativo { border-color: var(--texto); }
+  .tema-swatch.tema-verde { background: linear-gradient(135deg, #0a7d4f, #0f9d63); }
+  .tema-swatch.tema-azul { background: linear-gradient(135deg, #1d6fa5, #2a8fd1); }
+  .tema-swatch.tema-escuro { background: linear-gradient(135deg, #23262a, #0e0f11); }
+  .relogio-card { background: var(--fundo-card); border-radius: 16px; padding: 16px 18px; margin-bottom: 12px;
+                   box-shadow: var(--sombra); display: flex; justify-content: space-between; align-items: center;
+                   flex-wrap: wrap; gap: 10px; }
+  .relogio-hora { font-size: 2.4rem; font-weight: 700; letter-spacing: 0.02em; line-height: 1;
+                   font-variant-numeric: tabular-nums; }
+  .relogio-dia { color: var(--texto-secundario); font-size: 0.95rem; margin-top: 4px; text-transform: capitalize; }
+  .feriados-info { text-align: right; font-size: 0.82rem; color: var(--texto-secundario); line-height: 1.5; }
+  .feriados-info .feriado-hoje { color: var(--vermelho); font-weight: 700; display: block; }
+  .feriados-info .feriado-proximo strong { color: var(--texto); }
   .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
-  .tabs a { flex: 1; text-align: center; padding: 10px; border-radius: 10px; background: white;
-            color: #444; font-size: 0.9rem; font-weight: 500; box-shadow: var(--sombra);
+  .tabs a { flex: 1; text-align: center; padding: 10px; border-radius: 10px; background: var(--fundo-card);
+            color: var(--texto-secundario); font-size: 0.9rem; font-weight: 500; box-shadow: var(--sombra);
             transition: transform 0.12s ease, box-shadow 0.12s ease; }
   .tabs a.ativo { background: var(--verde); color: white; box-shadow: 0 2px 8px rgba(10,125,79,0.35); }
   .tabs a:active { transform: scale(0.97); }
-  .conversa { background: white; border-radius: 14px; padding: 12px 16px; margin-bottom: 10px;
+  .conversa { background: var(--fundo-card); border-radius: 14px; padding: 12px 16px; margin-bottom: 10px;
               display: flex; gap: 10px; align-items: flex-start; box-shadow: var(--sombra);
               transition: box-shadow 0.15s ease, transform 0.15s ease; }
   .conversa:hover { box-shadow: var(--sombra-media); transform: translateY(-1px); }
@@ -82,7 +117,7 @@ ESTILO = """
   .cabecalho { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
   .cabecalho .avatar { width: 48px; height: 48px; font-size: 1.1rem; }
   .cabecalho .nome { font-size: 1.2rem; font-weight: 600; }
-  .cabecalho .tel { color: #666; font-size: 0.85rem; }
+  .cabecalho .tel { color: var(--texto-secundario); font-size: 0.85rem; }
   .btn-consultor { width: 100%; padding: 12px; margin-bottom: 8px; border-radius: 12px; border: none;
                     background: linear-gradient(135deg, var(--azul), #164f79); color: white; font-size: 0.9rem;
                     font-weight: 600; box-shadow: 0 3px 10px rgba(29,111,165,0.35);
@@ -98,17 +133,18 @@ ESTILO = """
   .badge.ganho { background: #e3f2e9; color: var(--verde); }
   .badge.perdido { background: #fdeaea; color: var(--vermelho); }
   .filtros { display: flex; gap: 6px; margin-bottom: 12px; overflow-x: auto; padding-bottom: 2px; }
-  .filtros a { flex-shrink: 0; padding: 7px 14px; border-radius: 20px; background: white; color: #444;
-               font-size: 0.85rem; border: 1px solid #e2e2e2; transition: all 0.12s ease; }
+  .filtros a { flex-shrink: 0; padding: 7px 14px; border-radius: 20px; background: var(--fundo-card);
+               color: var(--texto-secundario); font-size: 0.85rem; border: 1px solid var(--borda);
+               transition: all 0.12s ease; }
   .filtros a.ativo { background: #1a1a1a; color: white; border-color: #1a1a1a; }
-  .preview { color: #666; font-size: 0.9rem; margin-top: 4px; white-space: nowrap; overflow: hidden;
-             text-overflow: ellipsis; }
+  .preview { color: var(--texto-secundario); font-size: 0.9rem; margin-top: 4px; white-space: nowrap;
+             overflow: hidden; text-overflow: ellipsis; }
   .msg { padding: 9px 13px; border-radius: 16px; margin-bottom: 10px; max-width: 80%; word-break: break-word;
-         box-shadow: var(--sombra); position: relative; line-height: 1.4; }
-  .msg.user { background: white; margin-right: auto; border-bottom-left-radius: 4px; }
-  .msg.assistant { background: linear-gradient(135deg, #e3f9d5, #d4f4c0); margin-left: auto;
+         box-shadow: var(--sombra); position: relative; line-height: 1.4; color: var(--texto); }
+  .msg.user { background: var(--fundo-card); margin-right: auto; border-bottom-left-radius: 4px; }
+  .msg.assistant { background: linear-gradient(135deg, var(--bolha-bot-1), var(--bolha-bot-2)); margin-left: auto;
                     border-bottom-right-radius: 4px; }
-  .msg.humano { background: linear-gradient(135deg, #d9ecff, #c9e3ff); margin-left: auto;
+  .msg.humano { background: linear-gradient(135deg, var(--bolha-humano-1), var(--bolha-humano-2)); margin-left: auto;
                 border-bottom-right-radius: 4px; }
   .msg img { max-width: 100%; border-radius: 10px; display: block; margin-bottom: 4px; }
   .msg .ficheiro { display: block; font-size: 0.85rem; }
@@ -116,31 +152,33 @@ ESTILO = """
                      text-transform: uppercase; letter-spacing: 0.03em; }
   .msg .hora { display: block; font-size: 0.7rem; color: #999; margin-top: 4px; text-align: right; }
   .msg-acoes { display: flex; gap: 12px; justify-content: flex-end; margin-top: 5px; }
-  .msg-acoes summary, .msg-acoes .btn-apagar { font-size: 0.75rem; color: #666; cursor: pointer;
+  .msg-acoes summary, .msg-acoes .btn-apagar { font-size: 0.75rem; color: var(--texto-secundario); cursor: pointer;
                                                  background: none; border: none; padding: 0;
                                                  transition: color 0.12s ease; }
   .msg-acoes summary:hover { color: var(--verde); }
   .msg-acoes .btn-apagar { color: var(--vermelho); opacity: 0.85; }
   .msg-acoes .btn-apagar:hover { opacity: 1; }
   .form-editar { display: flex; gap: 6px; margin-top: 6px; }
-  .form-editar textarea { flex: 1; padding: 7px 10px; border-radius: 8px; border: 1px solid #ddd; resize: none; }
+  .form-editar textarea { flex: 1; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--borda);
+                            resize: none; background: var(--fundo-card); color: var(--texto); }
   .form-editar button { padding: 0 12px; border-radius: 8px; border: none; background: var(--verde);
                           color: white; font-weight: 600; transition: background 0.12s ease; }
   .form-editar button:hover { background: var(--verde-escuro); }
   form.reply { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
-  form.reply textarea { flex: 1; min-width: 140px; padding: 12px 14px; border-radius: 20px; border: 1px solid #ddd;
-                         resize: none; background: white; box-shadow: var(--sombra); transition: border-color 0.12s ease; }
+  form.reply textarea { flex: 1; min-width: 140px; padding: 12px 14px; border-radius: 20px; border: 1px solid var(--borda);
+                         resize: none; background: var(--fundo-card); color: var(--texto); box-shadow: var(--sombra);
+                         transition: border-color 0.12s ease; }
   form.reply textarea:focus { outline: none; border-color: var(--verde); }
   form.reply button { padding: 0 22px; height: 44px; border-radius: 22px; border: none; background: var(--verde);
                        color: white; font-weight: 600; box-shadow: 0 3px 10px rgba(10,125,79,0.35);
                        transition: transform 0.12s ease, background 0.12s ease; }
   form.reply button:hover { background: var(--verde-escuro); }
   form.reply button:active { transform: scale(0.96); }
-  form.reply .anexo { flex-basis: 100%; font-size: 0.85rem; }
+  form.reply .anexo { flex-basis: 100%; font-size: 0.85rem; color: var(--texto-secundario); }
   .toggle { display: flex; gap: 8px; align-items: center; margin: 8px 0; flex-wrap: wrap; }
-  .toggle.separador { padding-top: 8px; border-top: 1px solid #eee; }
-  .toggle button { padding: 7px 13px; border-radius: 10px; border: 1px solid #ddd; background: white;
-                    font-size: 0.85rem; font-weight: 500; transition: all 0.12s ease; }
+  .toggle.separador { padding-top: 8px; border-top: 1px solid var(--borda); }
+  .toggle button { padding: 7px 13px; border-radius: 10px; border: 1px solid var(--borda); background: var(--fundo-card);
+                    color: var(--texto); font-size: 0.85rem; font-weight: 500; transition: all 0.12s ease; }
   .toggle button:hover { border-color: #bbb; }
   .toggle button.ativo { background: var(--verde); color: white; border-color: var(--verde);
                           box-shadow: 0 2px 6px rgba(10,125,79,0.3); }
@@ -149,33 +187,34 @@ ESTILO = """
   .toggle button.ganho.ativo { background: var(--verde); border-color: var(--verde); }
   .toggle button.perdido.ativo { background: var(--vermelho); border-color: var(--vermelho); box-shadow: 0 2px 6px rgba(192,57,43,0.3); }
   .topo { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .topo-direita { display: flex; align-items: center; gap: 12px; }
   .marca { display: flex; align-items: center; gap: 8px; }
   .marca .logo { width: 32px; height: 32px; border-radius: 8px; box-shadow: var(--sombra); }
   .marca h1 { margin: 0; }
   .alertas { margin-bottom: 12px; }
   .alerta { background: linear-gradient(135deg, #fffaeb, #fff3d6); border: 1px solid #f0d78c; border-radius: 12px;
             padding: 10px 14px; margin-bottom: 8px; display: flex; justify-content: space-between;
-            align-items: center; gap: 10px; font-size: 0.9rem; box-shadow: var(--sombra); }
+            align-items: center; gap: 10px; font-size: 0.9rem; box-shadow: var(--sombra); color: #1a1a1a; }
   .alerta a.ver { color: #1a1a1a; text-decoration: underline; flex: 1; }
   .alerta button { flex-shrink: 0; padding: 5px 12px; border-radius: 8px; border: 1px solid #ddd;
                     background: white; font-size: 0.8rem; transition: all 0.12s ease; }
   .alerta button:hover { background: #f5f5f5; }
   .alertas-topo { display: flex; justify-content: flex-end; margin-bottom: 6px; }
-  .alertas-topo button { padding: 5px 12px; border-radius: 8px; border: 1px solid #ddd;
-                          background: white; font-size: 0.8rem; transition: all 0.12s ease; }
-  .alertas-topo button:hover { background: #f5f5f5; }
-  .link-agenda { padding: 9px 16px; border-radius: 10px; background: white; color: #444;
-                 font-size: 0.9rem; font-weight: 500; border: 1px solid #e2e2e2; box-shadow: var(--sombra);
+  .alertas-topo button { padding: 5px 12px; border-radius: 8px; border: 1px solid var(--borda);
+                          background: var(--fundo-card); color: var(--texto); font-size: 0.8rem; transition: all 0.12s ease; }
+  .alertas-topo button:hover { filter: brightness(0.96); }
+  .link-agenda { padding: 9px 16px; border-radius: 10px; background: var(--fundo-card); color: var(--texto-secundario);
+                 font-size: 0.9rem; font-weight: 500; border: 1px solid var(--borda); box-shadow: var(--sombra);
                  transition: box-shadow 0.12s ease; }
   .link-agenda:hover { box-shadow: var(--sombra-media); }
-  .agendamento { background: white; border-radius: 14px; padding: 12px 16px; margin-bottom: 10px;
+  .agendamento { background: var(--fundo-card); border-radius: 14px; padding: 12px 16px; margin-bottom: 10px;
                  box-shadow: var(--sombra); }
   .agendamento .quando { font-weight: 700; color: var(--verde); }
   .agendamento .nome { font-weight: 600; }
-  .agendamento .tel { color: #666; font-size: 0.85rem; }
+  .agendamento .tel { color: var(--texto-secundario); font-size: 0.85rem; }
   .agendamento .info { margin-top: 6px; font-size: 0.9rem; white-space: pre-wrap; }
   .btn-cancelar { margin-top: 8px; padding: 7px 14px; border-radius: 8px; border: 1px solid var(--vermelho);
-                   background: white; color: var(--vermelho); font-size: 0.85rem; font-weight: 500;
+                   background: var(--fundo-card); color: var(--vermelho); font-size: 0.85rem; font-weight: 500;
                    transition: all 0.12s ease; }
   .btn-cancelar:hover { background: var(--vermelho); color: white; }
   .sync-ok { color: var(--verde); font-size: 0.9rem; }
@@ -184,29 +223,101 @@ ESTILO = """
   /* Página de conversa: cabeçalho fixo no topo, mensagens com scroll próprio,
      caixa de resposta fixa em baixo — como numa app de chat normal */
   body.conversa-page { padding: 0; height: 100vh; display: flex; flex-direction: column; overflow: hidden;
-                        background: #eef0f2; }
-  .cabecalho-fixo { flex-shrink: 0; background: white; border-bottom: 1px solid #eee;
+                        background: var(--fundo); }
+  .cabecalho-fixo { flex-shrink: 0; background: var(--fundo-card); border-bottom: 1px solid var(--borda);
                      padding: 10px 12px; position: relative; z-index: 20; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
   .cabecalho-linha { display: flex; align-items: center; gap: 10px; }
-  .cabecalho-linha .voltar { font-size: 1.2rem; flex-shrink: 0; }
+  .cabecalho-linha .voltar { font-size: 1.2rem; flex-shrink: 0; color: var(--texto); }
   .cabecalho-linha .avatar { width: 40px; height: 40px; font-size: 0.95rem; }
   .cabecalho-info { flex: 1; min-width: 0; }
   .cabecalho-info .nome { font-weight: 600; font-size: 1rem; white-space: nowrap; overflow: hidden;
-                           text-overflow: ellipsis; }
-  .cabecalho-info .tel { color: #666; font-size: 0.8rem; }
+                           text-overflow: ellipsis; color: var(--texto); }
+  .cabecalho-info .tel { color: var(--texto-secundario); font-size: 0.8rem; }
   .opcoes { flex-shrink: 0; }
   .opcoes summary { list-style: none; cursor: pointer; font-size: 1.3rem; padding: 4px 10px; border-radius: 8px;
-                     transition: background 0.12s ease; }
-  .opcoes summary:hover { background: #f0f0f0; }
+                     transition: background 0.12s ease; color: var(--texto); }
+  .opcoes summary:hover { background: var(--fundo); }
   .opcoes summary::-webkit-details-marker { display: none; }
-  .opcoes[open] summary { color: var(--verde); background: #f0f0f0; }
-  .opcoes-conteudo { position: absolute; right: 12px; top: 100%; background: white; border: 1px solid #eee;
+  .opcoes[open] summary { color: var(--verde); background: var(--fundo); }
+  .opcoes-conteudo { position: absolute; right: 12px; top: 100%; background: var(--fundo-card); border: 1px solid var(--borda);
                       border-radius: 14px; padding: 12px; margin-top: 6px; box-shadow: var(--sombra-media);
                       min-width: 240px; max-width: calc(100vw - 24px); z-index: 30; }
   .mensagens-scroll { flex: 1; overflow-y: auto; padding: 14px 12px; }
-  .reply-fixa { flex-shrink: 0; background: #f2f3f5; border-top: 1px solid #e6e6e6; padding: 10px 12px; }
+  .reply-fixa { flex-shrink: 0; background: var(--fundo); border-top: 1px solid var(--borda); padding: 10px 12px; }
 </style>
 """
+
+# Script de tema — colocado logo a seguir à abertura do <body>, para aplicar
+# o tema guardado antes do resto da página ser pintado (evita "flash").
+SCRIPT_TEMA = """<script>
+(function() {
+  var guardado = localStorage.getItem('reduzmais-tema');
+  if (guardado) document.body.classList.add(guardado);
+})();
+function mudarTema(tema) {
+  document.body.classList.remove('tema-verde', 'tema-azul', 'tema-escuro');
+  if (tema !== 'tema-verde') document.body.classList.add(tema);
+  localStorage.setItem('reduzmais-tema', tema === 'tema-verde' ? '' : tema);
+  document.querySelectorAll('.tema-swatch').forEach(function(el) {
+    el.classList.toggle('ativo', el.classList.contains(tema));
+  });
+}
+window.addEventListener('load', function() {
+  var guardado = localStorage.getItem('reduzmais-tema') || 'tema-verde';
+  document.querySelectorAll('.tema-swatch').forEach(function(el) {
+    el.classList.toggle('ativo', el.classList.contains(guardado));
+  });
+});
+</script>"""
+
+
+def _swatches_tema_html() -> str:
+    """Botões circulares para trocar o tema de cores do painel (guardado no browser)."""
+    return "".join(
+        f'<button type="button" class="tema-swatch {classe}" title="{titulo}" onclick="mudarTema(\'{classe}\')"></button>'
+        for classe, titulo in [("tema-verde", "Verde"), ("tema-azul", "Azul"), ("tema-escuro", "Escuro")]
+    )
+
+
+def _relogio_feriados_html() -> str:
+    """Cartão com relógio digital (hora/dia atualizados em tempo real) e feriados atuais/próximos."""
+    hoje = datetime.now(ZoneInfo("Europe/Lisbon")).date()
+    feriado_hoje = feriado_de_hoje(hoje)
+
+    partes_feriados = ""
+    if feriado_hoje:
+        partes_feriados += f'<span class="feriado-hoje">🎉 Hoje é feriado — {html.escape(feriado_hoje)}</span>'
+    for data_f, nome_f in proximos_feriados(hoje, quantidade=2 if feriado_hoje else 3):
+        if data_f == hoje:
+            continue
+        partes_feriados += (
+            f'<span class="feriado-proximo">{data_f.strftime("%d/%m")} — '
+            f'<strong>{html.escape(nome_f)}</strong></span><br>'
+        )
+
+    return f"""
+    <div class="relogio-card">
+      <div>
+        <div class="relogio-hora" id="relogio-hora">--:--</div>
+        <div class="relogio-dia" id="relogio-dia">a carregar…</div>
+      </div>
+      <div class="feriados-info">{partes_feriados}</div>
+    </div>
+    <script>
+    (function() {{
+      var dias = ['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'];
+      function atualizar() {{
+        var agora = new Date();
+        var hh = String(agora.getHours()).padStart(2, '0');
+        var mm = String(agora.getMinutes()).padStart(2, '0');
+        document.getElementById('relogio-hora').textContent = hh + ':' + mm;
+        document.getElementById('relogio-dia').textContent = dias[agora.getDay()] + ', ' + agora.toLocaleDateString('pt-PT');
+      }}
+      atualizar();
+      setInterval(atualizar, 1000);
+    }})();
+    </script>
+    """
 
 
 # O WhatsApp Cloud API da Meta não disponibiliza a foto de perfil dos contactos
@@ -325,13 +436,18 @@ async def painel(estado: str = "aberta", categoria: str = "todas", auth: bool = 
     <head><title>Conversas — Reduz+ Energia</title>{ESTILO}{FAVICON_LINK}
     <meta name="viewport" content="width=device-width, initial-scale=1"></head>
     <body>
+      {SCRIPT_TEMA}
       <div class="topo">
         <div class="marca">
           <img class="logo" src="{LOGO_URL}" alt="Reduz+ Energia">
           <h1>Conversas</h1>
         </div>
-        <a class="link-agenda" href="/admin/agenda">📅 Agenda</a>
+        <div class="topo-direita">
+          {_swatches_tema_html()}
+          <a class="link-agenda" href="/admin/agenda">📅 Agenda</a>
+        </div>
       </div>
+      {_relogio_feriados_html()}
       {alertas_html}
       <div class="tabs">
         <a href="/admin/?estado=aberta&categoria={categoria}" class="{'ativo' if estado == 'aberta' else ''}">Em aberto ({n_abertas})</a>
@@ -402,6 +518,7 @@ async def agenda(auth: bool = Depends(verificar_password)):
     <head><title>Agenda — Reduz+ Energia</title>{ESTILO}{FAVICON_LINK}
     <meta name="viewport" content="width=device-width, initial-scale=1"></head>
     <body>
+      {SCRIPT_TEMA}
       <a href="/admin/">&larr; Conversas</a>
       <h1>Próximas chamadas agendadas</h1>
       {estado_outlook}
@@ -541,6 +658,7 @@ async def ver_conversa(telefono: str, auth: bool = Depends(verificar_password)):
     <head><title>{html.escape(titulo_pagina)} — Reduz+ Energia</title>{ESTILO}{FAVICON_LINK}
     <meta name="viewport" content="width=device-width, initial-scale=1"></head>
     <body class="conversa-page">
+      {SCRIPT_TEMA}
       <div class="cabecalho-fixo">
         <div class="cabecalho-linha">
           <a class="voltar" href="/admin/">&larr;</a>
