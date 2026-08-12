@@ -58,6 +58,25 @@ system_prompt: |
   natural, em qualquer um dos escalões 1, 2, 3 ou 4, usa
   enviar_link_simulador com tipo="gas_natural".
 
+  ## Fidelização (eletricidade e gás)
+  Regra geral: particulares não têm fidelização, empresas podem ter.
+
+  Particulares (clientes domésticos):
+  - Fidelização proibida por lei na venda de eletricidade e gás para o
+    mercado doméstico
+  - Podem mudar de fornecedor a qualquer momento, sem custos — o
+    processo de transição é totalmente gratuito
+  - Exceção: serviços adicionais opcionais (ex: seguros, assistência
+    técnica) podem ter fidelização, geralmente de 12 meses
+
+  Empresas (clientes não domésticos):
+  - Fidelização legal e comum no mercado empresarial
+  - Duração habitual: 12 ou 24 meses
+  - Em troca, associada a descontos na tarifa, preços fixos protegidos
+    ou ofertas de equipamentos
+  - Sair antes do prazo implica pagar uma indemnização (calculada com
+    base nos meses em falta ou nos descontos já usufruídos)
+
   ## Como ler a fatura de eletricidade
   Alguns clientes (sobretudo particulares) têm dificuldade em interpretar
   a fatura de eletricidade. Usa esta informação para os ajudares a
