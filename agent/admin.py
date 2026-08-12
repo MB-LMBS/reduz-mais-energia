@@ -186,11 +186,12 @@ ESTILO = """
   .toggle button.interessado.ativo { background: #a5701d; border-color: #a5701d; box-shadow: 0 2px 6px rgba(165,112,29,0.3); }
   .toggle button.ganho.ativo { background: var(--verde); border-color: var(--verde); }
   .toggle button.perdido.ativo { background: var(--vermelho); border-color: var(--vermelho); box-shadow: 0 2px 6px rgba(192,57,43,0.3); }
-  .topo { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .topo { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center;
+          gap: 8px; margin-bottom: 12px; }
   .topo-direita { display: flex; align-items: center; gap: 12px; }
   .marca { display: flex; align-items: center; gap: 8px; }
-  .marca .logo { width: 32px; height: 32px; border-radius: 8px; box-shadow: var(--sombra); }
-  .marca h1 { margin: 0; }
+  .marca .logo { width: 32px; height: 32px; border-radius: 8px; box-shadow: var(--sombra); flex-shrink: 0; }
+  .marca h1 { margin: 0; font-size: 1.05rem; }
   .alertas { margin-bottom: 12px; }
   .alerta { background: linear-gradient(135deg, #fffaeb, #fff3d6); border: 1px solid #f0d78c; border-radius: 12px;
             padding: 10px 14px; margin-bottom: 8px; display: flex; justify-content: space-between;
@@ -440,7 +441,7 @@ async def painel(estado: str = "aberta", categoria: str = "todas", auth: bool = 
       <div class="topo">
         <div class="marca">
           <img class="logo" src="{LOGO_URL}" alt="Reduz+ Energia">
-          <h1>Conversas</h1>
+          <h1>Conversas Reduz+ Energia</h1>
         </div>
         <div class="topo-direita">
           {_swatches_tema_html()}
