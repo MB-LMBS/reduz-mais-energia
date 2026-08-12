@@ -52,102 +52,141 @@ FAVICON_LINK = f'<link rel="icon" type="image/png" href="{LOGO_URL}">'
 
 ESTILO = """
 <style>
-  body { font-family: -apple-system, sans-serif; max-width: 640px; margin: 0 auto; padding: 12px;
-         background: #f5f5f5; color: #1a1a1a; }
+  :root {
+    --verde: #0a7d4f; --verde-escuro: #086b43; --azul: #1d6fa5; --vermelho: #c0392b;
+    --sombra: 0 1px 3px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.05);
+    --sombra-media: 0 4px 14px rgba(0,0,0,0.12);
+  }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; max-width: 640px;
+         margin: 0 auto; padding: 12px; background: #f2f3f5; color: #1a1a1a; }
   h1 { font-size: 1.3rem; }
-  a { color: #0a7d4f; text-decoration: none; }
+  a { color: var(--verde); text-decoration: none; }
+  button { font-family: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
   .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
-  .tabs a { flex: 1; text-align: center; padding: 8px; border-radius: 8px; background: white;
-            color: #444; font-size: 0.9rem; }
-  .tabs a.ativo { background: #0a7d4f; color: white; }
-  .conversa { background: white; border-radius: 10px; padding: 12px 16px; margin-bottom: 10px;
-              display: flex; gap: 10px; align-items: flex-start; box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
+  .tabs a { flex: 1; text-align: center; padding: 10px; border-radius: 10px; background: white;
+            color: #444; font-size: 0.9rem; font-weight: 500; box-shadow: var(--sombra);
+            transition: transform 0.12s ease, box-shadow 0.12s ease; }
+  .tabs a.ativo { background: var(--verde); color: white; box-shadow: 0 2px 8px rgba(10,125,79,0.35); }
+  .tabs a:active { transform: scale(0.97); }
+  .conversa { background: white; border-radius: 14px; padding: 12px 16px; margin-bottom: 10px;
+              display: flex; gap: 10px; align-items: flex-start; box-shadow: var(--sombra);
+              transition: box-shadow 0.15s ease, transform 0.15s ease; }
+  .conversa:hover { box-shadow: var(--sombra-media); transform: translateY(-1px); }
   .conversa .corpo { flex: 1; min-width: 0; }
   .conversa .top { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
   .conversa .tel { font-weight: 600; }
   .avatar { flex-shrink: 0; width: 40px; height: 40px; border-radius: 50%; display: flex;
             align-items: center; justify-content: center; color: white; font-weight: 600;
-            font-size: 0.95rem; }
+            font-size: 0.95rem; box-shadow: inset 0 0 0 2px rgba(255,255,255,0.25); }
   .cabecalho { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
   .cabecalho .avatar { width: 48px; height: 48px; font-size: 1.1rem; }
   .cabecalho .nome { font-size: 1.2rem; font-weight: 600; }
   .cabecalho .tel { color: #666; font-size: 0.85rem; }
-  .btn-consultor { width: 100%; padding: 10px; margin-bottom: 8px; border-radius: 8px; border: none;
-                    background: #1d6fa5; color: white; font-size: 0.9rem; }
+  .btn-consultor { width: 100%; padding: 12px; margin-bottom: 8px; border-radius: 12px; border: none;
+                    background: linear-gradient(135deg, var(--azul), #164f79); color: white; font-size: 0.9rem;
+                    font-weight: 600; box-shadow: 0 3px 10px rgba(29,111,165,0.35);
+                    transition: transform 0.12s ease, box-shadow 0.12s ease; }
+  .btn-consultor:hover { box-shadow: 0 5px 16px rgba(29,111,165,0.45); }
+  .btn-consultor:active { transform: scale(0.98); }
   .badges { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
-  .badge { font-size: 0.75rem; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
-  .badge.bot { background: #e3f2e9; color: #0a7d4f; }
-  .badge.manual { background: #fdeaea; color: #c0392b; }
+  .badge { font-size: 0.75rem; padding: 3px 9px; border-radius: 10px; white-space: nowrap; font-weight: 600; }
+  .badge.bot { background: #e3f2e9; color: var(--verde); }
+  .badge.manual { background: #fdeaea; color: var(--vermelho); }
   .badge.tratada { background: #e9e9e9; color: #666; }
   .badge.interessado { background: #fdf2df; color: #a5701d; }
-  .badge.ganho { background: #e3f2e9; color: #0a7d4f; }
-  .badge.perdido { background: #fdeaea; color: #c0392b; }
+  .badge.ganho { background: #e3f2e9; color: var(--verde); }
+  .badge.perdido { background: #fdeaea; color: var(--vermelho); }
   .filtros { display: flex; gap: 6px; margin-bottom: 12px; overflow-x: auto; padding-bottom: 2px; }
-  .filtros a { flex-shrink: 0; padding: 6px 12px; border-radius: 20px; background: white; color: #444;
-               font-size: 0.85rem; border: 1px solid #ddd; }
+  .filtros a { flex-shrink: 0; padding: 7px 14px; border-radius: 20px; background: white; color: #444;
+               font-size: 0.85rem; border: 1px solid #e2e2e2; transition: all 0.12s ease; }
   .filtros a.ativo { background: #1a1a1a; color: white; border-color: #1a1a1a; }
   .preview { color: #666; font-size: 0.9rem; margin-top: 4px; white-space: nowrap; overflow: hidden;
              text-overflow: ellipsis; }
-  .msg { padding: 8px 12px; border-radius: 10px; margin-bottom: 8px; max-width: 80%; word-break: break-word; }
-  .msg.user { background: white; margin-right: auto; }
-  .msg.assistant { background: #dcf8c6; margin-left: auto; }
-  .msg.humano { background: #cfe8ff; margin-left: auto; }
-  .msg img { max-width: 100%; border-radius: 8px; display: block; margin-bottom: 4px; }
+  .msg { padding: 9px 13px; border-radius: 16px; margin-bottom: 10px; max-width: 80%; word-break: break-word;
+         box-shadow: var(--sombra); position: relative; line-height: 1.4; }
+  .msg.user { background: white; margin-right: auto; border-bottom-left-radius: 4px; }
+  .msg.assistant { background: linear-gradient(135deg, #e3f9d5, #d4f4c0); margin-left: auto;
+                    border-bottom-right-radius: 4px; }
+  .msg.humano { background: linear-gradient(135deg, #d9ecff, #c9e3ff); margin-left: auto;
+                border-bottom-right-radius: 4px; }
+  .msg img { max-width: 100%; border-radius: 10px; display: block; margin-bottom: 4px; }
   .msg .ficheiro { display: block; font-size: 0.85rem; }
-  .msg .remetente { display: block; font-size: 0.7rem; font-weight: 600; opacity: 0.55; margin-bottom: 2px; }
-  .msg .hora { display: block; font-size: 0.7rem; color: #999; margin-top: 3px; text-align: right; }
-  .msg-acoes { display: flex; gap: 10px; justify-content: flex-end; margin-top: 4px; }
+  .msg .remetente { display: block; font-size: 0.7rem; font-weight: 700; opacity: 0.5; margin-bottom: 3px;
+                     text-transform: uppercase; letter-spacing: 0.03em; }
+  .msg .hora { display: block; font-size: 0.7rem; color: #999; margin-top: 4px; text-align: right; }
+  .msg-acoes { display: flex; gap: 12px; justify-content: flex-end; margin-top: 5px; }
   .msg-acoes summary, .msg-acoes .btn-apagar { font-size: 0.75rem; color: #666; cursor: pointer;
-                                                 background: none; border: none; padding: 0; }
-  .msg-acoes .btn-apagar { color: #c0392b; }
+                                                 background: none; border: none; padding: 0;
+                                                 transition: color 0.12s ease; }
+  .msg-acoes summary:hover { color: var(--verde); }
+  .msg-acoes .btn-apagar { color: var(--vermelho); opacity: 0.85; }
+  .msg-acoes .btn-apagar:hover { opacity: 1; }
   .form-editar { display: flex; gap: 6px; margin-top: 6px; }
-  .form-editar textarea { flex: 1; padding: 6px; border-radius: 6px; border: 1px solid #ccc; resize: none; }
-  .form-editar button { padding: 0 10px; border-radius: 6px; border: none; background: #0a7d4f; color: white; }
-  form.reply { display: flex; flex-wrap: wrap; gap: 8px; }
-  form.reply textarea { flex: 1; min-width: 140px; padding: 10px; border-radius: 8px; border: 1px solid #ccc;
-                         resize: none; }
-  form.reply button { padding: 0 16px; border-radius: 8px; border: none; background: #0a7d4f; color: white; }
+  .form-editar textarea { flex: 1; padding: 7px 10px; border-radius: 8px; border: 1px solid #ddd; resize: none; }
+  .form-editar button { padding: 0 12px; border-radius: 8px; border: none; background: var(--verde);
+                          color: white; font-weight: 600; transition: background 0.12s ease; }
+  .form-editar button:hover { background: var(--verde-escuro); }
+  form.reply { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+  form.reply textarea { flex: 1; min-width: 140px; padding: 12px 14px; border-radius: 20px; border: 1px solid #ddd;
+                         resize: none; background: white; box-shadow: var(--sombra); transition: border-color 0.12s ease; }
+  form.reply textarea:focus { outline: none; border-color: var(--verde); }
+  form.reply button { padding: 0 22px; height: 44px; border-radius: 22px; border: none; background: var(--verde);
+                       color: white; font-weight: 600; box-shadow: 0 3px 10px rgba(10,125,79,0.35);
+                       transition: transform 0.12s ease, background 0.12s ease; }
+  form.reply button:hover { background: var(--verde-escuro); }
+  form.reply button:active { transform: scale(0.96); }
   form.reply .anexo { flex-basis: 100%; font-size: 0.85rem; }
   .toggle { display: flex; gap: 8px; align-items: center; margin: 8px 0; flex-wrap: wrap; }
-  .toggle.separador { padding-top: 8px; border-top: 1px solid #ddd; }
-  .toggle button { padding: 6px 12px; border-radius: 8px; border: 1px solid #ccc; background: white; }
-  .toggle button.ativo { background: #0a7d4f; color: white; border-color: #0a7d4f; }
-  .toggle button.tratada.ativo { background: #666; border-color: #666; }
-  .toggle button.interessado.ativo { background: #a5701d; border-color: #a5701d; }
-  .toggle button.ganho.ativo { background: #0a7d4f; border-color: #0a7d4f; }
-  .toggle button.perdido.ativo { background: #c0392b; border-color: #c0392b; }
+  .toggle.separador { padding-top: 8px; border-top: 1px solid #eee; }
+  .toggle button { padding: 7px 13px; border-radius: 10px; border: 1px solid #ddd; background: white;
+                    font-size: 0.85rem; font-weight: 500; transition: all 0.12s ease; }
+  .toggle button:hover { border-color: #bbb; }
+  .toggle button.ativo { background: var(--verde); color: white; border-color: var(--verde);
+                          box-shadow: 0 2px 6px rgba(10,125,79,0.3); }
+  .toggle button.tratada.ativo { background: #666; border-color: #666; box-shadow: none; }
+  .toggle button.interessado.ativo { background: #a5701d; border-color: #a5701d; box-shadow: 0 2px 6px rgba(165,112,29,0.3); }
+  .toggle button.ganho.ativo { background: var(--verde); border-color: var(--verde); }
+  .toggle button.perdido.ativo { background: var(--vermelho); border-color: var(--vermelho); box-shadow: 0 2px 6px rgba(192,57,43,0.3); }
   .topo { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
   .marca { display: flex; align-items: center; gap: 8px; }
-  .marca .logo { width: 32px; height: 32px; border-radius: 8px; }
+  .marca .logo { width: 32px; height: 32px; border-radius: 8px; box-shadow: var(--sombra); }
   .marca h1 { margin: 0; }
   .alertas { margin-bottom: 12px; }
-  .alerta { background: #fff8e1; border: 1px solid #f0d78c; border-radius: 8px; padding: 10px 12px;
-            margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;
-            gap: 10px; font-size: 0.9rem; }
+  .alerta { background: linear-gradient(135deg, #fffaeb, #fff3d6); border: 1px solid #f0d78c; border-radius: 12px;
+            padding: 10px 14px; margin-bottom: 8px; display: flex; justify-content: space-between;
+            align-items: center; gap: 10px; font-size: 0.9rem; box-shadow: var(--sombra); }
   .alerta a.ver { color: #1a1a1a; text-decoration: underline; flex: 1; }
-  .alerta button { flex-shrink: 0; padding: 4px 10px; border-radius: 6px; border: 1px solid #ccc;
-                    background: white; font-size: 0.8rem; }
+  .alerta button { flex-shrink: 0; padding: 5px 12px; border-radius: 8px; border: 1px solid #ddd;
+                    background: white; font-size: 0.8rem; transition: all 0.12s ease; }
+  .alerta button:hover { background: #f5f5f5; }
   .alertas-topo { display: flex; justify-content: flex-end; margin-bottom: 6px; }
-  .alertas-topo button { padding: 4px 10px; border-radius: 6px; border: 1px solid #ccc;
-                          background: white; font-size: 0.8rem; }
-  .link-agenda { padding: 8px 14px; border-radius: 8px; background: white; color: #444;
-                 font-size: 0.9rem; border: 1px solid #ddd; }
-  .agendamento { background: white; border-radius: 10px; padding: 12px 16px; margin-bottom: 10px;
-                 box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
-  .agendamento .quando { font-weight: 600; color: #0a7d4f; }
+  .alertas-topo button { padding: 5px 12px; border-radius: 8px; border: 1px solid #ddd;
+                          background: white; font-size: 0.8rem; transition: all 0.12s ease; }
+  .alertas-topo button:hover { background: #f5f5f5; }
+  .link-agenda { padding: 9px 16px; border-radius: 10px; background: white; color: #444;
+                 font-size: 0.9rem; font-weight: 500; border: 1px solid #e2e2e2; box-shadow: var(--sombra);
+                 transition: box-shadow 0.12s ease; }
+  .link-agenda:hover { box-shadow: var(--sombra-media); }
+  .agendamento { background: white; border-radius: 14px; padding: 12px 16px; margin-bottom: 10px;
+                 box-shadow: var(--sombra); }
+  .agendamento .quando { font-weight: 700; color: var(--verde); }
   .agendamento .nome { font-weight: 600; }
   .agendamento .tel { color: #666; font-size: 0.85rem; }
   .agendamento .info { margin-top: 6px; font-size: 0.9rem; white-space: pre-wrap; }
-  .btn-cancelar { margin-top: 8px; padding: 6px 12px; border-radius: 6px; border: 1px solid #c0392b;
-                   background: white; color: #c0392b; font-size: 0.85rem; }
-  .sync-ok { color: #0a7d4f; font-size: 0.9rem; }
+  .btn-cancelar { margin-top: 8px; padding: 7px 14px; border-radius: 8px; border: 1px solid var(--vermelho);
+                   background: white; color: var(--vermelho); font-size: 0.85rem; font-weight: 500;
+                   transition: all 0.12s ease; }
+  .btn-cancelar:hover { background: var(--vermelho); color: white; }
+  .sync-ok { color: var(--verde); font-size: 0.9rem; }
   .sync-aviso { color: #a5701d; font-size: 0.9rem; background: #fff8e1; padding: 8px 12px; border-radius: 8px; }
 
   /* Página de conversa: cabeçalho fixo no topo, mensagens com scroll próprio,
      caixa de resposta fixa em baixo — como numa app de chat normal */
-  body.conversa-page { padding: 0; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
-  .cabecalho-fixo { flex-shrink: 0; background: #f5f5f5; border-bottom: 1px solid #ddd;
-                     padding: 10px 12px; position: relative; z-index: 20; }
+  body.conversa-page { padding: 0; height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+                        background: #eef0f2; }
+  .cabecalho-fixo { flex-shrink: 0; background: white; border-bottom: 1px solid #eee;
+                     padding: 10px 12px; position: relative; z-index: 20; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
   .cabecalho-linha { display: flex; align-items: center; gap: 10px; }
   .cabecalho-linha .voltar { font-size: 1.2rem; flex-shrink: 0; }
   .cabecalho-linha .avatar { width: 40px; height: 40px; font-size: 0.95rem; }
@@ -156,14 +195,16 @@ ESTILO = """
                            text-overflow: ellipsis; }
   .cabecalho-info .tel { color: #666; font-size: 0.8rem; }
   .opcoes { flex-shrink: 0; }
-  .opcoes summary { list-style: none; cursor: pointer; font-size: 1.4rem; padding: 2px 8px; }
+  .opcoes summary { list-style: none; cursor: pointer; font-size: 1.3rem; padding: 4px 10px; border-radius: 8px;
+                     transition: background 0.12s ease; }
+  .opcoes summary:hover { background: #f0f0f0; }
   .opcoes summary::-webkit-details-marker { display: none; }
-  .opcoes[open] summary { color: #0a7d4f; }
-  .opcoes-conteudo { position: absolute; right: 12px; top: 100%; background: white; border: 1px solid #ddd;
-                      border-radius: 10px; padding: 12px; margin-top: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  .opcoes[open] summary { color: var(--verde); background: #f0f0f0; }
+  .opcoes-conteudo { position: absolute; right: 12px; top: 100%; background: white; border: 1px solid #eee;
+                      border-radius: 14px; padding: 12px; margin-top: 6px; box-shadow: var(--sombra-media);
                       min-width: 240px; max-width: calc(100vw - 24px); z-index: 30; }
-  .mensagens-scroll { flex: 1; overflow-y: auto; padding: 12px; }
-  .reply-fixa { flex-shrink: 0; background: #f5f5f5; border-top: 1px solid #ddd; padding: 8px 12px; }
+  .mensagens-scroll { flex: 1; overflow-y: auto; padding: 14px 12px; }
+  .reply-fixa { flex-shrink: 0; background: #f2f3f5; border-top: 1px solid #e6e6e6; padding: 10px 12px; }
 </style>
 """
 
