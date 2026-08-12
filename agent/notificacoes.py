@@ -17,6 +17,10 @@ logger = logging.getLogger("agentkit")
 # Número personal a donde se reenvía la conversación
 NUMERO_CONSULTOR = os.getenv("NUMERO_CONSULTOR", "")
 
+# URL pública do painel — usada para que os links nas notificações sejam
+# clicáveis diretamente a partir do WhatsApp (ex: no telemóvel, fora do escritório)
+APP_BASE_URL = os.getenv("APP_BASE_URL", "https://reduz-mais-energia-production.up.railway.app")
+
 
 async def notificar_consultor(
     proveedor, telefono_cliente: str, historial: list[dict], mensaje_actual: str | None = None
@@ -37,7 +41,7 @@ async def notificar_consultor(
     if mensaje_actual:
         lineas.append(f"*Cliente:* {mensaje_actual}")
     lineas.append("")
-    lineas.append(f"Responde diretamente ao cliente em: /admin/conversa/{telefono_cliente}")
+    lineas.append(f"Responde diretamente ao cliente em: {APP_BASE_URL}/admin/conversa/{telefono_cliente}")
 
     return await proveedor.enviar_mensaje(NUMERO_CONSULTOR, "\n".join(lineas))
 
@@ -65,7 +69,7 @@ async def notificar_lembrete_chamada(proveedor, agendamento: dict) -> bool:
         "",
         f"*Informação registada:*\n{informacao}",
         "",
-        f"Ver conversa: /admin/conversa/{telefone}",
+        f"Ver conversa: {APP_BASE_URL}/admin/conversa/{telefone}",
     ]
 
     return await proveedor.enviar_mensaje(NUMERO_CONSULTOR, "\n".join(lineas))
@@ -95,7 +99,7 @@ async def notificar_agendamento(proveedor, agendamento: dict) -> bool:
         "",
         f"*Informação registada:*\n{informacao}",
         "",
-        f"Ver conversa: /admin/conversa/{telefone}",
+        f"Ver conversa: {APP_BASE_URL}/admin/conversa/{telefone}",
     ]
 
     return await proveedor.enviar_mensaje(NUMERO_CONSULTOR, "\n".join(lineas))
