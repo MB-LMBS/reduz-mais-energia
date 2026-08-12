@@ -163,8 +163,10 @@ def obtener_contexto_cliente(nome_contato: str | None, primeira_mensagem: bool) 
 
     if primeira_mensagem:
         linhas.append(
-            "Esta é a primeira mensagem desta conversa. Cumprimenta com calor, dá "
-            "as boas-vindas à Reduz+ Energia, e só depois respondas ao que o "
+            "Esta é a primeira mensagem desta conversa. Cumprimenta com calor e "
+            "usa literalmente a frase de marca \"Seja bem-vindo à Reduz+ Energia\" "
+            "(ou \"Seja bem-vinda à Reduz+ Energia\" se o nome do cliente for "
+            "claramente feminino) logo no início, e só depois respondas ao que o "
             "cliente disse — nunca respondas com uma mensagem seca ou demasiado curta."
         )
     else:
