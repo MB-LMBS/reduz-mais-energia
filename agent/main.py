@@ -50,6 +50,11 @@ PORT = int(os.getenv("PORT", 8000))
 MEDIA_DIR = "data/media"
 os.makedirs(MEDIA_DIR, exist_ok=True)
 
+# Números de sistema do WhatsApp/Meta (ex: notificações automáticas sobre
+# gestão da conta, tickets de suporte) — não são clientes reais, o bot nunca
+# deve responder-lhes
+NUMEROS_SISTEMA_WHATSAPP = {"15517868411"}
+
 # Intervalo (segundos) entre verificaciones de llamadas agendadas próximas
 INTERVALO_LEMBRETES = 60
 
@@ -155,6 +160,12 @@ async def webhook_handler(request: Request):
             # Ignorar mensajes propios, o mensajes de texto vacíos (los archivos
             # sin descripción también deben procesarse, por eso no se descartan aquí)
             if msg.es_propio or (msg.tipo == "texto" and not msg.texto):
+                continue
+
+            # Notificações automáticas do próprio WhatsApp/Meta (ex: gestão de
+            # número, tickets de suporte) — ignorar por completo, não é um cliente
+            if msg.telefono in NUMEROS_SISTEMA_WHATSAPP:
+                logger.info(f"Mensagem de sistema do WhatsApp ignorada ({msg.telefono})")
                 continue
 
             logger.info(f"Mensaje de {msg.telefono} ({msg.tipo}): {msg.texto}")
