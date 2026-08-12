@@ -21,6 +21,7 @@ from agent.memory import (
     establecer_nome_contato,
 )
 from agent.providers import obtener_proveedor
+from agent.notificacoes import notificar_consultor
 from agent.admin import router as admin_router
 
 load_dotenv()
@@ -34,10 +35,6 @@ logger = logging.getLogger("agentkit")
 # Proveedor de WhatsApp (se configura en .env con WHATSAPP_PROVIDER)
 proveedor = obtener_proveedor()
 PORT = int(os.getenv("PORT", 8000))
-
-# Número personal a donde se reenvía la conversación cuando el cliente pide
-# hablar con un consultor humano
-NUMERO_CONSULTOR = os.getenv("NUMERO_CONSULTOR", "")
 
 # Carpeta donde se guardan los archivos que envían los clientes (facturas, fotos, etc.)
 MEDIA_DIR = "data/media"
@@ -59,24 +56,6 @@ async def guardar_media_recibido(msg) -> str | None:
     with open(ruta, "wb") as f:
         f.write(contenido)
     return ruta
-
-
-async def notificar_consultor(telefono_cliente: str, historial: list[dict], mensaje_actual: str):
-    """Envía la conversación completa al WhatsApp personal del consultor."""
-    if not NUMERO_CONSULTOR:
-        logger.warning("NUMERO_CONSULTOR no configurado — no se puede notificar")
-        return
-
-    lineas = [f"🔔 *Pedido de consultor* — {telefono_cliente}", ""]
-    for msg in historial:
-        etiqueta = "Cliente" if msg["role"] == "user" else "Reduz+"
-        contenido = msg["content"] or f"[ficheiro: {msg.get('nome_ficheiro') or msg.get('tipo')}]"
-        lineas.append(f"*{etiqueta}:* {contenido}")
-    lineas.append(f"*Cliente:* {mensaje_actual}")
-    lineas.append("")
-    lineas.append(f"Responde diretamente ao cliente em: /admin/conversa/{telefono_cliente}")
-
-    await proveedor.enviar_mensaje(NUMERO_CONSULTOR, "\n".join(lineas))
 
 
 @asynccontextmanager
@@ -180,7 +159,7 @@ async def webhook_handler(request: Request):
             # Si el cliente pidió/aceptó hablar con un consultor, reenviamos
             # la conversación completa y pausamos el bot en esa conversación
             if escalar:
-                await notificar_consultor(msg.telefono, historial, msg.texto)
+                await notificar_consultor(proveedor, msg.telefono, historial, msg.texto)
                 await establecer_modo(msg.telefono, "manual")
 
         return {"status": "ok"}

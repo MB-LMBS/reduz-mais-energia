@@ -27,6 +27,7 @@ from agent.memory import (
     establecer_categoria, CATEGORIAS_VALIDAS, guardar_mensaje,
 )
 from agent.providers import obtener_proveedor
+from agent.notificacoes import notificar_consultor, NUMERO_CONSULTOR
 
 logger = logging.getLogger("agentkit")
 router = APIRouter(prefix="/admin")
@@ -57,6 +58,8 @@ ESTILO = """
   .cabecalho .avatar { width: 48px; height: 48px; font-size: 1.1rem; }
   .cabecalho .nome { font-size: 1.2rem; font-weight: 600; }
   .cabecalho .tel { color: #666; font-size: 0.85rem; }
+  .btn-consultor { width: 100%; padding: 10px; margin-bottom: 8px; border-radius: 8px; border: none;
+                    background: #1d6fa5; color: white; font-size: 0.9rem; }
   .badges { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
   .badge { font-size: 0.75rem; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
   .badge.bot { background: #e3f2e9; color: #0a7d4f; }
@@ -253,6 +256,11 @@ async def ver_conversa(telefono: str, auth: bool = Depends(verificar_password)):
         </div>
       </div>
 
+      {f'''<form method="post" action="/admin/conversa/{telefono}/encaminhar"
+             onsubmit="return confirm('Encaminhar esta conversa para o consultor Luis Sequeira ({NUMERO_CONSULTOR})?')">
+        <button type="submit" class="btn-consultor">📞 Encaminhar para consultor</button>
+      </form>''' if NUMERO_CONSULTOR else ''}
+
       <div class="toggle">
         <form method="post" action="/admin/conversa/{telefono}/modo">
           <input type="hidden" name="modo" value="bot">
@@ -309,6 +317,19 @@ async def mudar_estado(telefono: str, estado: str = Form(...), auth: bool = Depe
     if estado not in ("aberta", "tratada"):
         raise HTTPException(status_code=400, detail="Estado inválido")
     await establecer_estado(telefono, estado)
+    return RedirectResponse(url=f"/admin/conversa/{telefono}", status_code=303)
+
+
+@router.post("/conversa/{telefono}/encaminhar")
+async def encaminhar_consultor(telefono: str, auth: bool = Depends(verificar_password)):
+    """Reenvia a conversa completa para o WhatsApp do consultor, manualmente."""
+    proveedor = obtener_proveedor()
+    historico = await obtener_historial(telefono, limite=100)
+    enviado = await notificar_consultor(proveedor, telefono, historico)
+    if enviado:
+        logger.info(f"Conversa {telefono} encaminhada manualmente para o consultor")
+    else:
+        logger.warning(f"Falha ao encaminhar conversa {telefono} para o consultor")
     return RedirectResponse(url=f"/admin/conversa/{telefono}", status_code=303)
 
 
