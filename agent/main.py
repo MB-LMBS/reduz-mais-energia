@@ -24,6 +24,7 @@ from agent.memory import (
     inicializar_db, guardar_mensaje, obtener_historial, obtener_modo,
     establecer_nome_contato, obtener_nome_contato, obter_agendamentos_a_lembrar,
     marcar_lembrete_enviado, criar_alerta, guardar_evento_outlook_id,
+    obtener_estado, establecer_estado,
 )
 from agent.providers import obtener_proveedor
 from agent.notificacoes import (
@@ -162,6 +163,12 @@ async def webhook_handler(request: Request):
             if msg.nome_contato:
                 await establecer_nome_contato(msg.telefono, msg.nome_contato)
             nome_contato = msg.nome_contato or await obtener_nome_contato(msg.telefono)
+
+            # Se a conversa estava marcada como "Tratada" e o cliente escreveu
+            # de novo, reabrimo-la automaticamente para não passar despercebida
+            if await obtener_estado(msg.telefono) == "tratada":
+                await establecer_estado(msg.telefono, "aberta")
+                logger.info(f"Conversación {msg.telefono} reaberta — cliente escreveu de novo")
 
             # Si el mensaje trae un archivo (imagen, PDF, etc.), lo descargamos
             # y guardamos localmente para poder verlo desde /admin
