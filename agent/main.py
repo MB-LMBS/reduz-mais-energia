@@ -61,11 +61,14 @@ NUMEROS_SISTEMA_WHATSAPP = {"15517868411"}
 # uma confirmação fixa
 MARCADOR_PEDIDO_SIMULADOR = "*TENHO INTERESSE NUMA PROPOSTA DE ELETRICIDADE*"
 
-MENSAGEM_CONFIRMACAO_PEDIDO_SIMULADOR = (
-    "Muito obrigado pelo seu tempo e pela confiança na Reduz+ Energia! 🙏 "
-    "O seu pedido foi recebido com sucesso. Um consultor energético vai entrar "
-    "em contacto consigo para validarmos os detalhes em conjunto."
-)
+def montar_confirmacao_pedido_simulador(texto_original: str) -> str:
+    """Cópia integral do pedido recebido, seguida da confirmação fixa ao cliente."""
+    return (
+        f"✅ *O seu pedido foi recebido com sucesso:*\n\n"
+        f"{texto_original}\n\n"
+        "Muito obrigado pelo seu tempo e pela confiança na Reduz+ Energia! 🙏 "
+        "Em breve irá entrar em contacto um consultor energético para validar o pedido."
+    )
 
 # Intervalo (segundos) entre verificaciones de llamadas agendadas próximas
 INTERVALO_LEMBRETES = 60
@@ -198,9 +201,10 @@ async def webhook_handler(request: Request):
             # bot/manual): confirma ao cliente com uma mensagem fixa e avisa o
             # consultor, tal como um pedido novo
             if msg.tipo == "texto" and msg.texto.strip().startswith(MARCADOR_PEDIDO_SIMULADOR):
+                confirmacao = montar_confirmacao_pedido_simulador(msg.texto)
                 await guardar_mensaje(msg.telefono, "user", msg.texto, tipo=msg.tipo)
-                await proveedor.enviar_mensaje(msg.telefono, MENSAGEM_CONFIRMACAO_PEDIDO_SIMULADOR)
-                await guardar_mensaje(msg.telefono, "assistant", MENSAGEM_CONFIRMACAO_PEDIDO_SIMULADOR)
+                await proveedor.enviar_mensaje(msg.telefono, confirmacao)
+                await guardar_mensaje(msg.telefono, "assistant", confirmacao)
                 await establecer_categoria(msg.telefono, "interessado")
                 await criar_alerta(
                     "pedido_simulador", msg.telefono,
