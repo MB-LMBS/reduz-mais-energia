@@ -344,10 +344,11 @@ async def obtener_horarios_ocupados(inicio: datetime, fim: datetime) -> set[date
 
 async def criar_agendamento(
     telefono: str, nome_cliente: str | None, data_hora: datetime, informacao: str
-) -> bool:
+) -> int | None:
     """
     Cria um agendamento se o horário ainda estiver livre.
-    Retorna False se alguém já tiver ocupado esse horário entretanto.
+    Retorna o id do agendamento criado, ou None se alguém já tiver ocupado
+    esse horário entretanto.
     """
     async with async_session() as session:
         query = select(Agendamento).where(
@@ -356,13 +357,36 @@ async def criar_agendamento(
         )
         result = await session.execute(query)
         if result.scalar_one_or_none():
-            return False
-        session.add(Agendamento(
+            return None
+        agendamento = Agendamento(
             telefono=telefono, nome_cliente=nome_cliente,
             data_hora=data_hora, informacao=informacao,
-        ))
+        )
+        session.add(agendamento)
         await session.commit()
-        return True
+        await session.refresh(agendamento)
+        return agendamento.id
+
+
+async def cancelar_agendamento(agendamento_id: int) -> dict | None:
+    """
+    Marca um agendamento como cancelado. Retorna os seus dados (para poder
+    remover o evento do calendário), ou None se não foi encontrado ou já
+    estava cancelado.
+    """
+    async with async_session() as session:
+        agendamento = await session.get(Agendamento, agendamento_id)
+        if not agendamento or agendamento.estado == "cancelado":
+            return None
+        agendamento.estado = "cancelado"
+        await session.commit()
+        return {
+            "id": agendamento.id,
+            "telefono": agendamento.telefono,
+            "nome_cliente": agendamento.nome_cliente,
+            "data_hora": agendamento.data_hora,
+            "informacao": agendamento.informacao,
+        }
 
 
 async def listar_agendamentos(apenas_futuros: bool = True) -> list[dict]:

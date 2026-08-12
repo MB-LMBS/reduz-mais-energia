@@ -28,10 +28,12 @@ from agent.memory import (
     establecer_categoria, CATEGORIAS_VALIDAS, guardar_mensaje, listar_agendamentos,
     editar_mensagem, apagar_mensagem, obtener_mensagens_novas,
     listar_alertas_nao_vistos, marcar_alerta_visto, marcar_todos_alertas_vistos,
+    cancelar_agendamento,
 )
 from agent.agenda import formatar_slot
 from agent.providers import obtener_proveedor
 from agent.notificacoes import notificar_consultor, NUMERO_CONSULTOR
+from agent.calendario import apagar_evento_chamada
 
 logger = logging.getLogger("agentkit")
 router = APIRouter(prefix="/admin")
@@ -125,6 +127,8 @@ ESTILO = """
   .agendamento .nome { font-weight: 600; }
   .agendamento .tel { color: #666; font-size: 0.85rem; }
   .agendamento .info { margin-top: 6px; font-size: 0.9rem; white-space: pre-wrap; }
+  .btn-cancelar { margin-top: 8px; padding: 6px 12px; border-radius: 6px; border: 1px solid #c0392b;
+                   background: white; color: #c0392b; font-size: 0.85rem; }
 
   /* Página de conversa: cabeçalho fixo no topo, mensagens com scroll próprio,
      caixa de resposta fixa em baixo — como numa app de chat normal */
@@ -315,6 +319,10 @@ async def agenda(auth: bool = Depends(verificar_password)):
           <div class="nome">{nome}</div>
           <div class="tel"><a href="/admin/conversa/{telefone}">{telefone}</a></div>
           <div class="info">{informacao}</div>
+          <form method="post" action="/admin/agenda/{a['id']}/cancelar"
+                onsubmit="return confirm('Cancelar esta chamada? Também será removida do calendário.')">
+            <button type="submit" class="btn-cancelar">Cancelar chamada</button>
+          </form>
         </div>
         """
 
@@ -332,6 +340,16 @@ async def agenda(auth: bool = Depends(verificar_password)):
     </body>
     </html>
     """
+
+
+@router.post("/agenda/{agendamento_id}/cancelar")
+async def cancelar_chamada(agendamento_id: int, auth: bool = Depends(verificar_password)):
+    """Cancela uma chamada agendada e remove o evento correspondente do iCloud Calendar."""
+    cancelado = await cancelar_agendamento(agendamento_id)
+    if cancelado:
+        await apagar_evento_chamada(agendamento_id)
+        logger.info(f"Chamada cancelada: agendamento {agendamento_id}")
+    return RedirectResponse(url="/admin/agenda", status_code=303)
 
 
 def _formatar_hora(timestamp: datetime | None) -> str:

@@ -234,8 +234,8 @@ async def _processar_agendamento(entrada: dict, telefono: str) -> tuple[str, dic
             None,
         )
 
-    sucesso = await criar_agendamento(telefono, nome or None, data_hora, informacao)
-    if not sucesso:
+    agendamento_id = await criar_agendamento(telefono, nome or None, data_hora, informacao)
+    if agendamento_id is None:
         return (
             "Não foi possível marcar: esse horário acabou de ser ocupado por outra "
             "pessoa. Sugere ao cliente escolher outro horário disponível.",
@@ -243,6 +243,7 @@ async def _processar_agendamento(entrada: dict, telefono: str) -> tuple[str, dic
         )
 
     dados = {
+        "id": agendamento_id,
         "telefono": telefono,
         "nome_cliente": nome,
         "data_hora": data_hora,

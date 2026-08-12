@@ -27,6 +27,7 @@ from agent.memory import (
 )
 from agent.providers import obtener_proveedor
 from agent.notificacoes import notificar_consultor, notificar_agendamento, notificar_lembrete_chamada
+from agent.calendario import criar_evento_chamada
 from agent.admin import router as admin_router
 
 load_dotenv()
@@ -214,6 +215,10 @@ async def webhook_handler(request: Request):
                 await criar_alerta(
                     "agendamento", msg.telefono,
                     f"📅 Chamada agendada com {nome} para {formatar_slot(agendamento['data_hora'])}",
+                )
+                await criar_evento_chamada(
+                    agendamento["id"], agendamento.get("nome_cliente"),
+                    agendamento["telefono"], agendamento["data_hora"], agendamento["informacao"],
                 )
 
         return {"status": "ok"}
