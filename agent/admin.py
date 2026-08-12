@@ -10,6 +10,7 @@ Painel web simples e protegido por password para:
 """
 
 import os
+import re
 import html
 import uuid
 import secrets
@@ -76,7 +77,7 @@ ESTILO = """
   .filtros a.ativo { background: #1a1a1a; color: white; border-color: #1a1a1a; }
   .preview { color: #666; font-size: 0.9rem; margin-top: 4px; white-space: nowrap; overflow: hidden;
              text-overflow: ellipsis; }
-  .msg { padding: 8px 12px; border-radius: 10px; margin-bottom: 8px; max-width: 80%; }
+  .msg { padding: 8px 12px; border-radius: 10px; margin-bottom: 8px; max-width: 80%; word-break: break-word; }
   .msg.user { background: white; margin-right: auto; }
   .msg.assistant { background: #dcf8c6; margin-left: auto; }
   .msg.humano { background: #cfe8ff; margin-left: auto; }
@@ -266,6 +267,22 @@ def _formatar_hora(timestamp: datetime | None) -> str:
     return hora_local.strftime("%d/%m %H:%M")
 
 
+URL_REGEX = re.compile(r'https?://[^\s<>"]+')
+
+
+def _linkificar(texto: str) -> str:
+    """Escapa o texto de uma mensagem e transforma URLs em links clicáveis."""
+    partes = []
+    posicao = 0
+    for m in URL_REGEX.finditer(texto):
+        partes.append(html.escape(texto[posicao:m.start()]))
+        url_escapado = html.escape(m.group(0))
+        partes.append(f'<a href="{url_escapado}" target="_blank" rel="noopener">{url_escapado}</a>')
+        posicao = m.end()
+    partes.append(html.escape(texto[posicao:]))
+    return "".join(partes)
+
+
 def _render_mensagem(msg: dict, telefono: str) -> str:
     """Gera o HTML de uma mensagem, incluindo pré-visualização de ficheiros e hora."""
     classe = "user" if msg["role"] == "user" else ("humano" if msg["role"] == "humano" else "assistant")
@@ -281,7 +298,7 @@ def _render_mensagem(msg: dict, telefono: str) -> str:
             partes += f'<a class="ficheiro" href="{url}" target="_blank">📎 {nome_mostrar}</a>'
 
     if msg["content"]:
-        partes += html.escape(msg["content"])
+        partes += _linkificar(msg["content"])
 
     partes += f'<small class="hora">{_formatar_hora(msg.get("timestamp"))}</small>'
 
