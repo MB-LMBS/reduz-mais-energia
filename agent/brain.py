@@ -118,7 +118,7 @@ async def obtener_contexto_agenda() -> str:
     Genera un bloque con los próximos horarios libres para chamadas telefónicas,
     para que el modelo pueda ofrecerlos directamente sin inventar horas.
     """
-    slots = await proximos_horarios_disponiveis(quantidade=6)
+    slots = await proximos_horarios_disponiveis(quantidade=3)
     if not slots:
         return (
             "\n\n## Agendamento de chamadas\n"
@@ -128,15 +128,21 @@ async def obtener_contexto_agenda() -> str:
     linhas = "\n".join(f"- {formatar_slot(slot)}" for slot in slots)
     return (
         "\n\n## Agendamento de chamadas\n"
-        "Se o cliente mostrar interesse em falar por telefone com um consultor, "
-        "podes oferecer-lhe uma chamada. As chamadas são sempre à tarde "
-        "(14h-18h), de Segunda a Sábado, em blocos de 15 minutos. Os próximos "
-        "horários livres são:\n"
+        "Não ofereças uma chamada logo na primeira mensagem nem em resposta a "
+        "um simples cumprimento (ex: 'boa noite', 'olá', 'tudo bem?') — "
+        "responde ao cumprimento com naturalidade e percebe primeiro o que o "
+        "cliente procura. Só ofereças a chamada depois de o cliente mostrar "
+        "interesse real no serviço (ex: já perguntou sobre uma solução "
+        "específica, quer avançar, ou pede para falar com alguém).\n"
+        "As chamadas são sempre à tarde (14h-18h), de Segunda a Sábado, em "
+        "blocos de 15 minutos. Os próximos horários livres são:\n"
         f"{linhas}\n"
-        "Confirma com o cliente o horário exato, o nome dele e o motivo da "
-        "chamada, e só depois usa a ferramenta agendar_chamada para a marcar. "
-        "Se o cliente preferir outro dia/hora dentro da grelha, podes marcar "
-        "diretamente — a ferramenta valida se está mesmo livre."
+        "Quando ofereceres, sugere apenas 2 ou 3 horários — não despejes uma "
+        "lista longa. Confirma sempre com o cliente o horário exato, o nome "
+        "dele e o motivo da chamada, e só depois usa a ferramenta "
+        "agendar_chamada para a marcar. Se o cliente preferir outro dia/hora "
+        "dentro da grelha, podes marcar diretamente — a ferramenta valida se "
+        "está mesmo livre."
     )
 
 
