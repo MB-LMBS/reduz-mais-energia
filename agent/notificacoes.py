@@ -23,7 +23,8 @@ APP_BASE_URL = os.getenv("APP_BASE_URL", "https://reduz-mais-energia-production.
 
 
 async def notificar_consultor(
-    proveedor, telefono_cliente: str, historial: list[dict], mensaje_actual: str | None = None
+    proveedor, telefono_cliente: str, historial: list[dict],
+    mensaje_actual: str | None = None, motivo: str | None = None,
 ) -> bool:
     """
     Envía la conversación completa al WhatsApp personal del consultor.
@@ -33,7 +34,10 @@ async def notificar_consultor(
         logger.warning("NUMERO_CONSULTOR no configurado — no se puede notificar")
         return False
 
-    lineas = [f"🔔 *Pedido de consultor* — {telefono_cliente}", ""]
+    lineas = [f"🔔 *Pedido de consultor* — {telefono_cliente}"]
+    if motivo:
+        lineas.append(f"_{motivo}_")
+    lineas.append("")
     for msg in historial:
         etiqueta = "Cliente" if msg["role"] == "user" else "Reduz+"
         contenido = msg["content"] or f"[ficheiro: {msg.get('nome_ficheiro') or msg.get('tipo')}]"

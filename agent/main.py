@@ -192,7 +192,7 @@ async def webhook_handler(request: Request):
             historial = await obtener_historial(msg.telefono)
 
             # Generar respuesta con Claude
-            respuesta, escalar, agendamento, opcoes, link_botao = await generar_respuesta(
+            respuesta, escalar, agendamento, opcoes, link_botao, motivo_escalada = await generar_respuesta(
                 texto_para_ia, historial, msg.telefono, nome_contato
             )
 
@@ -219,7 +219,7 @@ async def webhook_handler(request: Request):
             # Si el cliente pidió/aceptó hablar con un consultor, reenviamos
             # la conversación completa y pausamos el bot en esa conversación
             if escalar:
-                await notificar_consultor(proveedor, msg.telefono, historial, msg.texto)
+                await notificar_consultor(proveedor, msg.telefono, historial, msg.texto, motivo_escalada)
                 await establecer_modo(msg.telefono, "manual")
                 await criar_alerta(
                     "escalada", msg.telefono,

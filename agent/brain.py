@@ -385,16 +385,18 @@ async def generar_respuesta(
         nome_contato: Nombre de perfil de WhatsApp del cliente, si se conoce
 
     Returns:
-        Tupla (respuesta, escalar_a_consultor, agendamento, opcoes, link_botao) —
-        escalar_a_consultor es True si el cliente pidió/aceptó hablar con un
-        consultor humano; agendamento es None o un dict con los detalles de una
-        chamada recién marcada; opcoes es None o una lista de 2-3 respostas
-        curtas para mostrar como botões de resposta rápida; link_botao es None
-        ou um dict {"texto_botao", "url"} para mostrar um botão que abre um link.
+        Tupla (respuesta, escalar_a_consultor, agendamento, opcoes, link_botao,
+        motivo_escalada) — escalar_a_consultor es True si el cliente pidió/aceptó
+        hablar con un consultor humano; agendamento es None o un dict con los
+        detalles de una chamada recién marcada; opcoes es None o una lista de
+        2-3 respostas curtas para mostrar como botões de resposta rápida;
+        link_botao es None ou um dict {"texto_botao", "url"} para mostrar um
+        botão que abre um link; motivo_escalada é None ou o motivo da escalada
+        (para dar contexto ao consultor na notificação).
     """
     # Si el mensaje es muy corto o vacío, usar fallback
     if not mensaje or len(mensaje.strip()) < 2:
-        return obtener_mensaje_fallback(), False, None, None, None
+        return obtener_mensaje_fallback(), False, None, None, None, None
 
     system_prompt = await cargar_system_prompt(nome_contato, primeira_mensagem=not historial)
 
@@ -421,6 +423,7 @@ async def generar_respuesta(
     agendamento = None
     opcoes = None
     link_botao = None
+    motivo_escalada = None
 
     try:
         response = await client.messages.create(
@@ -444,7 +447,8 @@ async def generar_respuesta(
             for tool_use in tool_blocks:
                 if tool_use.name == "escalar_a_consultor":
                     escalar = True
-                    logger.info(f"Escalado a consultor: {tool_use.input.get('motivo')}")
+                    motivo_escalada = (tool_use.input.get("motivo") or "").strip() or None
+                    logger.info(f"Escalado a consultor: {motivo_escalada}")
                     resultado_texto = "Consultor notificado, vai entrar em contacto em breve."
                 elif tool_use.name == "agendar_chamada":
                     resultado_texto, dados = await _processar_agendamento(tool_use.input, telefono)
@@ -482,7 +486,7 @@ async def generar_respuesta(
             # mensagem final — não pedimos mais um texto ao modelo por cima
             if opcoes or link_botao:
                 logger.info(f"Curto-circuito: opções={opcoes} link_botao={link_botao}")
-                return texto_curto_circuito, escalar, agendamento, opcoes, link_botao
+                return texto_curto_circuito, escalar, agendamento, opcoes, link_botao, motivo_escalada
 
             mensajes.append({"role": "user", "content": resultados_tool})
             response = await client.messages.create(
@@ -495,8 +499,8 @@ async def generar_respuesta(
 
         texto = next((b.text for b in response.content if b.type == "text"), "")
         logger.info(f"Respuesta generada ({response.usage.input_tokens} in / {response.usage.output_tokens} out)")
-        return texto, escalar, agendamento, None, None
+        return texto, escalar, agendamento, None, None, motivo_escalada
 
     except Exception as e:
         logger.error(f"Error Claude API: {e}")
-        return obtener_mensaje_error(), False, None, None, None
+        return obtener_mensaje_error(), False, None, None, None, None
