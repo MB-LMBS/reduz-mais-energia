@@ -24,7 +24,7 @@ from agent.memory import (
     inicializar_db, guardar_mensaje, obtener_historial, obtener_modo,
     establecer_nome_contato, obtener_nome_contato, obter_agendamentos_a_lembrar,
     marcar_lembrete_enviado, criar_alerta, guardar_evento_outlook_id,
-    obtener_estado, establecer_estado,
+    obtener_estado, establecer_estado, establecer_categoria,
 )
 from agent.providers import obtener_proveedor
 from agent.notificacoes import (
@@ -54,6 +54,18 @@ os.makedirs(MEDIA_DIR, exist_ok=True)
 # gestão da conta, tickets de suporte) — não são clientes reais, o bot nunca
 # deve responder-lhes
 NUMEROS_SISTEMA_WHATSAPP = {"15517868411"}
+
+# Primeira linha fixa da mensagem pré-preenchida pelo botão "ENVIAR PEDIDO À
+# REDUZ+ ENERGIA" no simulador de eletricidade (EE_Campanhas) — identifica um
+# pedido vindo do simulador, para nunca passar pela IA e responder sempre com
+# uma confirmação fixa
+MARCADOR_PEDIDO_SIMULADOR = "*TENHO INTERESSE NUMA PROPOSTA DE ELETRICIDADE*"
+
+MENSAGEM_CONFIRMACAO_PEDIDO_SIMULADOR = (
+    "Muito obrigado pelo seu tempo e pela confiança na Reduz+ Energia! 🙏 "
+    "O seu pedido foi recebido com sucesso. Um consultor energético vai entrar "
+    "em contacto consigo para validarmos os detalhes em conjunto."
+)
 
 # Intervalo (segundos) entre verificaciones de llamadas agendadas próximas
 INTERVALO_LEMBRETES = 60
@@ -180,6 +192,26 @@ async def webhook_handler(request: Request):
             if await obtener_estado(msg.telefono) == "tratada":
                 await establecer_estado(msg.telefono, "aberta")
                 logger.info(f"Conversación {msg.telefono} reaberta — cliente escreveu de novo")
+
+            # Pedido vindo do botão "ENVIAR PEDIDO À REDUZ+ ENERGIA" do simulador
+            # de eletricidade — nunca passa pela IA (independentemente do modo
+            # bot/manual): confirma ao cliente com uma mensagem fixa e avisa o
+            # consultor, tal como um pedido novo
+            if msg.tipo == "texto" and msg.texto.strip().startswith(MARCADOR_PEDIDO_SIMULADOR):
+                await guardar_mensaje(msg.telefono, "user", msg.texto, tipo=msg.tipo)
+                await proveedor.enviar_mensaje(msg.telefono, MENSAGEM_CONFIRMACAO_PEDIDO_SIMULADOR)
+                await guardar_mensaje(msg.telefono, "assistant", MENSAGEM_CONFIRMACAO_PEDIDO_SIMULADOR)
+                await establecer_categoria(msg.telefono, "interessado")
+                await criar_alerta(
+                    "pedido_simulador", msg.telefono,
+                    f"📋 {nome_contato or msg.telefono} enviou um pedido pelo simulador de eletricidade",
+                )
+                await notificar_consultor(
+                    proveedor, msg.telefono, historial=[], mensaje_actual=msg.texto,
+                    motivo="Pedido via simulador de eletricidade (campanha)",
+                )
+                logger.info(f"Pedido de simulador processado para {msg.telefono}")
+                continue
 
             # Si el mensaje trae un archivo (imagen, PDF, etc.), lo descargamos
             # y guardamos localmente para poder verlo desde /admin
