@@ -47,6 +47,9 @@ security = HTTPBasic()
 MEDIA_DIR = "data/media"
 os.makedirs(MEDIA_DIR, exist_ok=True)
 
+LOGO_URL = "https://reduz-mais-energia.neocities.org/Reduz+%20Energia_logo.png"
+FAVICON_LINK = f'<link rel="icon" type="image/png" href="{LOGO_URL}">'
+
 ESTILO = """
 <style>
   body { font-family: -apple-system, sans-serif; max-width: 640px; margin: 0 auto; padding: 12px;
@@ -114,6 +117,9 @@ ESTILO = """
   .toggle button.ganho.ativo { background: #0a7d4f; border-color: #0a7d4f; }
   .toggle button.perdido.ativo { background: #c0392b; border-color: #c0392b; }
   .topo { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .marca { display: flex; align-items: center; gap: 8px; }
+  .marca .logo { width: 32px; height: 32px; border-radius: 8px; }
+  .marca h1 { margin: 0; }
   .alertas { margin-bottom: 12px; }
   .alerta { background: #fff8e1; border: 1px solid #f0d78c; border-radius: 8px; padding: 10px 12px;
             margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;
@@ -275,11 +281,14 @@ async def painel(estado: str = "aberta", categoria: str = "todas", auth: bool = 
 
     return f"""
     <html>
-    <head><title>Conversas — Reduz+ Energia</title>{ESTILO}
+    <head><title>Conversas — Reduz+ Energia</title>{ESTILO}{FAVICON_LINK}
     <meta name="viewport" content="width=device-width, initial-scale=1"></head>
     <body>
       <div class="topo">
-        <h1>Conversas</h1>
+        <div class="marca">
+          <img class="logo" src="{LOGO_URL}" alt="Reduz+ Energia">
+          <h1>Conversas</h1>
+        </div>
         <a class="link-agenda" href="/admin/agenda">📅 Agenda</a>
       </div>
       {alertas_html}
@@ -349,7 +358,7 @@ async def agenda(auth: bool = Depends(verificar_password)):
 
     return f"""
     <html>
-    <head><title>Agenda — Reduz+ Energia</title>{ESTILO}
+    <head><title>Agenda — Reduz+ Energia</title>{ESTILO}{FAVICON_LINK}
     <meta name="viewport" content="width=device-width, initial-scale=1"></head>
     <body>
       <a href="/admin/">&larr; Conversas</a>
@@ -488,7 +497,7 @@ async def ver_conversa(telefono: str, auth: bool = Depends(verificar_password)):
 
     return f"""
     <html>
-    <head><title>{html.escape(titulo_pagina)} — Reduz+ Energia</title>{ESTILO}
+    <head><title>{html.escape(titulo_pagina)} — Reduz+ Energia</title>{ESTILO}{FAVICON_LINK}
     <meta name="viewport" content="width=device-width, initial-scale=1"></head>
     <body class="conversa-page">
       <div class="cabecalho-fixo">
