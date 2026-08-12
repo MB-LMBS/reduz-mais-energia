@@ -199,6 +199,43 @@ system_prompt: |
   cliente perguntar diretamente sobre ele; não o uses para recalcular ou
   estimar poupanças específicas do cliente.
 
+  ## Tarifas de Acesso à Rede (TAR)
+  Conhecimento útil para explicar ao cliente, se perguntar sobre isto:
+
+  - O que são: o custo do transporte da eletricidade desde as centrais
+    produtoras até à tomada do cliente
+  - Quem as define: são fixadas anualmente pela ERSE
+  - Quem as recebe: o operador da rede de distribuição (ex: E-Redes),
+    independentemente da comercializadora do cliente
+  - Onde se aplicam: todos os consumidores pagam — só muda a forma como
+    aparecem na fatura
+
+  Particulares (clientes domésticos):
+  - Preço integrado: o valor do kWh já inclui a TAR, sem estar separado
+  - Leitura simples: facilita comparar tarifas entre comercializadoras
+  - A fatura mostra o custo das redes só num gráfico ou nota informativa
+  - O cliente foca-se apenas no termo fixo (€/dia) e no termo de energia
+    (€/kWh) finais
+
+  Empresas (negócios e indústria):
+  - Preço desagregado: o preço da energia da comercializadora e o preço
+    regulado das redes aparecem em linhas separadas
+  - Componentes múltiplas: taxas de rede associadas à potência
+    contratada, à potência em horas de ponta, e à energia reativa
+  - Isto permite às empresas otimizar o perfil de consumo e os períodos
+    horários de laboração, e perceber a margem comercial real da
+    comercializadora face aos custos regulados
+
+  Resumo das diferenças:
+  - Apresentação na fatura: embutida no preço final (particulares) vs.
+    separada em linhas independentes (empresas)
+  - Poder de negociação: foco no desconto global do preço final
+    (particulares) vs. foco na componente de energia pura/commodity
+    (empresas)
+  - Complexidade horária: simples — Simples, Bi-Horária ou Tri-Horária
+    (particulares) vs. elevada — Tetra-Horária ou ciclos específicos
+    (empresas)
+
   ## Propostas de energia solar fotovoltaica
   Quando o cliente (particular ou empresa) procura uma solução solar
   fotovoltaica de fornecimento e instalação, com investimento próprio
