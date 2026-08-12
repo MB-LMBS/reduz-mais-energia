@@ -39,14 +39,18 @@ class Mensaje(Base):
     role: Mapped[str] = mapped_column(String(20))  # "user", "assistant" o "humano"
     content: Mapped[str] = mapped_column(Text)
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    tipo: Mapped[str] = mapped_column(String(20), default="texto")  # texto, imagem, documento, audio, video
+    media_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    nome_ficheiro: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
 
 class Conversacion(Base):
-    """Estado de cada conversación: si responde el bot o un humano."""
+    """Estado de cada conversación: si responde el bot o un humano, y si sigue abierta."""
     __tablename__ = "conversaciones"
 
     telefono: Mapped[str] = mapped_column(String(50), primary_key=True)
-    modo: Mapped[str] = mapped_column(String(10), default="bot")  # "bot" o "manual"
+    modo: Mapped[str] = mapped_column(String(10), default="bot")      # "bot" o "manual"
+    estado: Mapped[str] = mapped_column(String(10), default="aberta")  # "aberta" o "tratada"
 
 
 async def inicializar_db():
@@ -55,14 +59,20 @@ async def inicializar_db():
         await conn.run_sync(Base.metadata.create_all)
 
 
-async def guardar_mensaje(telefono: str, role: str, content: str):
+async def guardar_mensaje(
+    telefono: str, role: str, content: str, tipo: str = "texto",
+    media_path: str | None = None, nome_ficheiro: str | None = None
+):
     """Guarda un mensaje en el historial de conversación."""
     async with async_session() as session:
         mensaje = Mensaje(
             telefono=telefono,
             role=role,
             content=content,
-            timestamp=datetime.utcnow()
+            timestamp=datetime.utcnow(),
+            tipo=tipo,
+            media_path=media_path,
+            nome_ficheiro=nome_ficheiro,
         )
         session.add(mensaje)
         await session.commit()
@@ -93,7 +103,13 @@ async def obtener_historial(telefono: str, limite: int = 20) -> list[dict]:
         mensajes.reverse()
 
         return [
-            {"role": msg.role, "content": msg.content}
+            {
+                "role": msg.role,
+                "content": msg.content,
+                "tipo": msg.tipo,
+                "media_path": msg.media_path,
+                "nome_ficheiro": msg.nome_ficheiro,
+            }
             for msg in mensajes
         ]
 
@@ -120,9 +136,31 @@ async def establecer_modo(telefono: str, modo: str):
         await session.commit()
 
 
+async def obtener_estado(telefono: str) -> str:
+    """Retorna el estado actual de la conversación: 'aberta' (default) o 'tratada'."""
+    async with async_session() as session:
+        query = select(Conversacion).where(Conversacion.telefono == telefono)
+        result = await session.execute(query)
+        conversacion = result.scalar_one_or_none()
+        return conversacion.estado if conversacion else "aberta"
+
+
+async def establecer_estado(telefono: str, estado: str):
+    """Cambia el estado de una conversación a 'aberta' o 'tratada'."""
+    async with async_session() as session:
+        query = select(Conversacion).where(Conversacion.telefono == telefono)
+        result = await session.execute(query)
+        conversacion = result.scalar_one_or_none()
+        if conversacion:
+            conversacion.estado = estado
+        else:
+            session.add(Conversacion(telefono=telefono, estado=estado))
+        await session.commit()
+
+
 async def listar_conversaciones() -> list[dict]:
     """
-    Lista todas las conversaciones con su último mensaje y modo actual,
+    Lista todas las conversaciones con su último mensaje, modo y estado,
     ordenadas por actividad más reciente primero.
     """
     async with async_session() as session:
@@ -145,12 +183,15 @@ async def listar_conversaciones() -> list[dict]:
         conversaciones = []
         for msg, _ in filas:
             modo = await obtener_modo(msg.telefono)
+            estado = await obtener_estado(msg.telefono)
             conversaciones.append({
                 "telefono": msg.telefono,
                 "ultimo_mensaje": msg.content,
                 "ultimo_role": msg.role,
+                "ultimo_tipo": msg.tipo,
                 "timestamp": msg.timestamp,
                 "modo": modo,
+                "estado": estado,
             })
         return conversaciones
 

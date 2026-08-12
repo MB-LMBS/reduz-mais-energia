@@ -9,6 +9,15 @@ from agent.providers.base import ProveedorWhatsApp, MensajeEntrante
 
 logger = logging.getLogger("agentkit")
 
+# Meta usa "image"/"document"/"audio"/"video" en el webhook — normalizamos a portugués
+TIPOS_MEDIA = {
+    "image": "imagem",
+    "document": "documento",
+    "audio": "audio",
+    "video": "video",
+    "sticker": "imagem",
+}
+
 
 class ProveedorMeta(ProveedorWhatsApp):
     """Proveedor de WhatsApp usando la API oficial de Meta (Cloud API)."""
@@ -38,14 +47,50 @@ class ProveedorMeta(ProveedorWhatsApp):
             for change in entry.get("changes", []):
                 value = change.get("value", {})
                 for msg in value.get("messages", []):
-                    if msg.get("type") == "text":
+                    tipo_meta = msg.get("type")
+
+                    if tipo_meta == "text":
                         mensajes.append(MensajeEntrante(
                             telefono=msg.get("from", ""),
                             texto=msg.get("text", {}).get("body", ""),
                             mensaje_id=msg.get("id", ""),
-                            es_propio=False,  # Meta solo envía mensajes entrantes
+                            es_propio=False,
+                        ))
+                    elif tipo_meta in TIPOS_MEDIA:
+                        dados_media = msg.get(tipo_meta, {})
+                        mensajes.append(MensajeEntrante(
+                            telefono=msg.get("from", ""),
+                            texto=dados_media.get("caption", ""),
+                            mensaje_id=msg.get("id", ""),
+                            es_propio=False,
+                            tipo=TIPOS_MEDIA[tipo_meta],
+                            media_id=dados_media.get("id"),
+                            mime_type=dados_media.get("mime_type"),
+                            nome_ficheiro=dados_media.get("filename"),
                         ))
         return mensajes
+
+    async def baixar_media(self, media_id: str) -> tuple[bytes, str] | None:
+        """Descarga un archivo de Meta: primero pide la URL temporal, luego el contenido."""
+        if not self.access_token:
+            return None
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        async with httpx.AsyncClient() as client:
+            r = await client.get(
+                f"https://graph.facebook.com/{self.api_version}/{media_id}",
+                headers=headers,
+            )
+            if r.status_code != 200:
+                logger.error(f"Error obteniendo URL de media {media_id}: {r.status_code} — {r.text}")
+                return None
+            url = r.json().get("url")
+            mime_type = r.json().get("mime_type", "application/octet-stream")
+
+            r2 = await client.get(url, headers=headers)
+            if r2.status_code != 200:
+                logger.error(f"Error descargando media {media_id}: {r2.status_code}")
+                return None
+            return r2.content, mime_type
 
     async def enviar_mensaje(self, telefono: str, mensaje: str) -> bool:
         """Envía mensaje via Meta WhatsApp Cloud API."""
@@ -67,4 +112,50 @@ class ProveedorMeta(ProveedorWhatsApp):
             r = await client.post(url, json=payload, headers=headers)
             if r.status_code != 200:
                 logger.error(f"Error Meta API: {r.status_code} — {r.text}")
+            return r.status_code == 200
+
+    async def enviar_documento(
+        self, telefono: str, ficheiro: bytes, nome_ficheiro: str,
+        mime_type: str, legenda: str = ""
+    ) -> bool:
+        """Sube el archivo a Meta y lo envía como imagen o documento, según el tipo."""
+        if not self.access_token or not self.phone_number_id:
+            logger.warning("META_ACCESS_TOKEN o META_PHONE_NUMBER_ID no configurados")
+            return False
+
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        async with httpx.AsyncClient() as client:
+            # Paso 1: subir el archivo para obtener un media_id
+            upload = await client.post(
+                f"https://graph.facebook.com/{self.api_version}/{self.phone_number_id}/media",
+                headers=headers,
+                data={"messaging_product": "whatsapp"},
+                files={"file": (nome_ficheiro, ficheiro, mime_type)},
+            )
+            if upload.status_code != 200:
+                logger.error(f"Error subiendo archivo a Meta: {upload.status_code} — {upload.text}")
+                return False
+            media_id = upload.json().get("id")
+
+            # Paso 2: enviar el mensaje referenciando el media_id
+            tipo_mensaje = "image" if mime_type.startswith("image/") else "document"
+            objeto_media = {"id": media_id}
+            if legenda:
+                objeto_media["caption"] = legenda
+            if tipo_mensaje == "document":
+                objeto_media["filename"] = nome_ficheiro
+
+            payload = {
+                "messaging_product": "whatsapp",
+                "to": telefono,
+                "type": tipo_mensaje,
+                tipo_mensaje: objeto_media,
+            }
+            r = await client.post(
+                f"https://graph.facebook.com/{self.api_version}/{self.phone_number_id}/messages",
+                headers={**headers, "Content-Type": "application/json"},
+                json=payload,
+            )
+            if r.status_code != 200:
+                logger.error(f"Error enviando documento: {r.status_code} — {r.text}")
             return r.status_code == 200

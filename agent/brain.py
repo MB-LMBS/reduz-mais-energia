@@ -118,7 +118,13 @@ async def generar_respuesta(mensaje: str, historial: list[dict]) -> tuple[str, b
     mensajes = []
     for msg in historial:
         role = "assistant" if msg["role"] == "humano" else msg["role"]
-        mensajes.append({"role": role, "content": msg["content"]})
+        contenido = msg["content"]
+        # Los archivos (imagem/documento/audio/video) no se envían a Claude —
+        # solo le avisamos que fueron recibidos, para no dejar el mensaje vacío
+        if msg.get("tipo", "texto") != "texto" and not contenido:
+            nome = msg.get("nome_ficheiro") or msg["tipo"]
+            contenido = f"[Cliente enviou um ficheiro: {nome}]"
+        mensajes.append({"role": role, "content": contenido})
 
     # Agregar el mensaje actual
     mensajes.append({

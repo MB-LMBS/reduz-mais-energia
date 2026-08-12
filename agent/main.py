@@ -7,6 +7,8 @@ Funciona con cualquier proveedor (Meta, Twilio) gracias a la capa de providers.
 """
 
 import os
+import uuid
+import mimetypes
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException
@@ -34,6 +36,27 @@ PORT = int(os.getenv("PORT", 8000))
 # hablar con un consultor humano
 NUMERO_CONSULTOR = os.getenv("NUMERO_CONSULTOR", "")
 
+# Carpeta donde se guardan los archivos que envían los clientes (facturas, fotos, etc.)
+MEDIA_DIR = "data/media"
+os.makedirs(MEDIA_DIR, exist_ok=True)
+
+
+async def guardar_media_recibido(msg) -> str | None:
+    """Descarga un archivo recibido y lo guarda localmente. Retorna la ruta relativa o None."""
+    if not msg.media_id:
+        return None
+    resultado = await proveedor.baixar_media(msg.media_id)
+    if resultado is None:
+        logger.warning(f"No se pudo descargar el archivo {msg.media_id} de {msg.telefono}")
+        return None
+    contenido, mime_type = resultado
+    extension = mimetypes.guess_extension(mime_type) or ""
+    nombre_archivo = f"{uuid.uuid4().hex}{extension}"
+    ruta = os.path.join(MEDIA_DIR, nombre_archivo)
+    with open(ruta, "wb") as f:
+        f.write(contenido)
+    return ruta
+
 
 async def notificar_consultor(telefono_cliente: str, historial: list[dict], mensaje_actual: str):
     """Envía la conversación completa al WhatsApp personal del consultor."""
@@ -44,7 +67,8 @@ async def notificar_consultor(telefono_cliente: str, historial: list[dict], mens
     lineas = [f"🔔 *Pedido de consultor* — {telefono_cliente}", ""]
     for msg in historial:
         etiqueta = "Cliente" if msg["role"] == "user" else "Reduz+"
-        lineas.append(f"*{etiqueta}:* {msg['content']}")
+        contenido = msg["content"] or f"[ficheiro: {msg.get('nome_ficheiro') or msg.get('tipo')}]"
+        lineas.append(f"*{etiqueta}:* {contenido}")
     lineas.append(f"*Cliente:* {mensaje_actual}")
     lineas.append("")
     lineas.append(f"Responde diretamente ao cliente em: /admin/conversa/{telefono_cliente}")
@@ -96,18 +120,34 @@ async def webhook_handler(request: Request):
         mensajes = await proveedor.parsear_webhook(request)
 
         for msg in mensajes:
-            # Ignorar mensajes propios o vacíos
-            if msg.es_propio or not msg.texto:
+            # Ignorar mensajes propios, o mensajes de texto vacíos (los archivos
+            # sin descripción también deben procesarse, por eso no se descartan aquí)
+            if msg.es_propio or (msg.tipo == "texto" and not msg.texto):
                 continue
 
-            logger.info(f"Mensaje de {msg.telefono}: {msg.texto}")
+            logger.info(f"Mensaje de {msg.telefono} ({msg.tipo}): {msg.texto}")
+
+            # Si el mensaje trae un archivo (imagen, PDF, etc.), lo descargamos
+            # y guardamos localmente para poder verlo desde /admin
+            media_path = None
+            if msg.tipo != "texto":
+                media_path = await guardar_media_recibido(msg)
+
+            # Texto que usará el agente: la descripción del cliente, o un aviso
+            # de que llegó un archivo si no escribió nada
+            texto_para_ia = msg.texto
+            if msg.tipo != "texto" and not texto_para_ia:
+                texto_para_ia = f"[Cliente enviou um ficheiro: {msg.nome_ficheiro or msg.tipo}]"
 
             # Si la conversación está en modo "manual", solo guardamos el
             # mensaje para que el humano lo vea y responda desde /admin —
             # el bot no interviene.
             modo = await obtener_modo(msg.telefono)
             if modo == "manual":
-                await guardar_mensaje(msg.telefono, "user", msg.texto)
+                await guardar_mensaje(
+                    msg.telefono, "user", msg.texto, tipo=msg.tipo,
+                    media_path=media_path, nome_ficheiro=msg.nome_ficheiro,
+                )
                 logger.info(f"Conversación {msg.telefono} en modo manual — bot no responde")
                 continue
 
@@ -116,10 +156,13 @@ async def webhook_handler(request: Request):
             historial = await obtener_historial(msg.telefono)
 
             # Generar respuesta con Claude
-            respuesta, escalar = await generar_respuesta(msg.texto, historial)
+            respuesta, escalar = await generar_respuesta(texto_para_ia, historial)
 
             # Guardar mensaje del usuario Y respuesta del agente en memoria
-            await guardar_mensaje(msg.telefono, "user", msg.texto)
+            await guardar_mensaje(
+                msg.telefono, "user", msg.texto, tipo=msg.tipo,
+                media_path=media_path, nome_ficheiro=msg.nome_ficheiro,
+            )
             await guardar_mensaje(msg.telefono, "assistant", respuesta)
 
             # Enviar respuesta por WhatsApp via el proveedor
