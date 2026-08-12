@@ -48,6 +48,14 @@ class ProveedorWhatsApp(ABC):
         linhas += [f"{i + 1}. {opcao}" for i, opcao in enumerate(opcoes)]
         return await self.enviar_mensaje(telefono, "\n".join(linhas))
 
+    async def enviar_botao_link(self, telefono: str, texto: str, texto_botao: str, url: str) -> bool:
+        """
+        Envía un mensaje con un botón que abre un link (ex: simulador). Por
+        defecto (si el proveedor no soporta botões de link) cae a texto plano
+        con el link al final.
+        """
+        return await self.enviar_mensaje(telefono, f"{texto}\n\n👉 {url}")
+
     async def baixar_media(self, media_id: str) -> tuple[bytes, str] | None:
         """Descarga un archivo recibido. Retorna (contenido, mime_type) o None si falla."""
         return None

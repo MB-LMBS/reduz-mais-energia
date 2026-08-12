@@ -23,6 +23,12 @@ logger = logging.getLogger("agentkit")
 # Cliente de Anthropic
 client = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
+URL_SIMULADOR = (
+    "https://reduz-mais-energia.neocities.org/Reduz+%20Energia/"
+    "Simuladores%20Energia/Cart%C3%A3o_Simulador"
+)
+TEXTO_BOTAO_SIMULADOR = "Ver simulador"
+
 # Herramientas que el modelo puede activar durante la conversación
 HERRAMIENTAS = [
     {
@@ -109,6 +115,28 @@ HERRAMIENTAS = [
                 },
             },
             "required": ["pergunta", "opcoes"],
+        },
+    },
+    {
+        "name": "enviar_link_simulador",
+        "description": (
+            "Usa esta ferramenta sempre que quiseres partilhar o link do "
+            "simulador de campanhas com o cliente. Mostra um botão clicável "
+            "'Ver simulador' em vez de escreveres o link em texto — mais "
+            "fácil de abrir a partir do WhatsApp no telemóvel."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "mensagem": {
+                    "type": "string",
+                    "description": (
+                        "Texto curto a acompanhar o botão (ex: convite a "
+                        "consultar as opções e campanhas disponíveis)."
+                    ),
+                },
+            },
+            "required": ["mensagem"],
         },
     },
 ]
@@ -290,7 +318,7 @@ async def _processar_agendamento(entrada: dict, telefono: str) -> tuple[str, dic
 
 async def generar_respuesta(
     mensaje: str, historial: list[dict], telefono: str, nome_contato: str | None = None
-) -> tuple[str, bool, dict | None, list[str] | None]:
+) -> tuple[str, bool, dict | None, list[str] | None, dict | None]:
     """
     Genera una respuesta usando Claude API.
 
@@ -301,15 +329,16 @@ async def generar_respuesta(
         nome_contato: Nombre de perfil de WhatsApp del cliente, si se conoce
 
     Returns:
-        Tupla (respuesta, escalar_a_consultor, agendamento, opcoes) — escalar_a_consultor
-        es True si el cliente pidió/aceptó hablar con un consultor humano; agendamento
-        es None o un dict con los detalles de una chamada recién marcada; opcoes es
-        None (mensaje de texto normal) o una lista de 2-3 respostas curtas para
-        mostrar como botões em vez de texto.
+        Tupla (respuesta, escalar_a_consultor, agendamento, opcoes, link_botao) —
+        escalar_a_consultor es True si el cliente pidió/aceptó hablar con un
+        consultor humano; agendamento es None o un dict con los detalles de una
+        chamada recién marcada; opcoes es None o una lista de 2-3 respostas
+        curtas para mostrar como botões de resposta rápida; link_botao es None
+        ou um dict {"texto_botao", "url"} para mostrar um botão que abre um link.
     """
     # Si el mensaje es muy corto o vacío, usar fallback
     if not mensaje or len(mensaje.strip()) < 2:
-        return obtener_mensaje_fallback(), False, None, None
+        return obtener_mensaje_fallback(), False, None, None, None
 
     system_prompt = await cargar_system_prompt(nome_contato, primeira_mensagem=not historial)
 
@@ -335,6 +364,7 @@ async def generar_respuesta(
     escalar = False
     agendamento = None
     opcoes = None
+    link_botao = None
 
     try:
         response = await client.messages.create(
@@ -348,7 +378,7 @@ async def generar_respuesta(
         # Ciclo de tool-use: el modelo puede activar una o varias herramientas
         # antes de dar la respuesta final al cliente (con un límite de seguridad)
         intentos = 0
-        texto_opcoes = None
+        texto_curto_circuito = None
         while response.stop_reason == "tool_use" and intentos < 4:
             intentos += 1
             tool_blocks = [b for b in response.content if b.type == "tool_use"]
@@ -370,11 +400,17 @@ async def generar_respuesta(
                         str(o).strip()[:20] for o in (tool_use.input.get("opcoes") or []) if str(o).strip()
                     ][:3]
                     if pergunta and len(opcoes_validas) >= 2:
-                        texto_opcoes = pergunta
+                        texto_curto_circuito = pergunta
                         opcoes = opcoes_validas
                         resultado_texto = "Opções mostradas ao cliente como botões."
                     else:
                         resultado_texto = "Pedido inválido (falta pergunta ou 2-3 opções) — responde em texto normal."
+                elif tool_use.name == "enviar_link_simulador":
+                    mensagem_link = (tool_use.input.get("mensagem") or "").strip() or \
+                        "Veja as opções e campanhas disponíveis:"
+                    texto_curto_circuito = mensagem_link
+                    link_botao = {"texto_botao": TEXTO_BOTAO_SIMULADOR, "url": URL_SIMULADOR}
+                    resultado_texto = "Botão do simulador mostrado ao cliente."
                 else:
                     resultado_texto = "Ferramenta desconhecida."
 
@@ -384,11 +420,11 @@ async def generar_respuesta(
                     "content": resultado_texto,
                 })
 
-            # Se as opções foram mostradas com sucesso, a própria pergunta já é
-            # a mensagem final — não pedimos mais um texto ao modelo por cima
-            if opcoes:
-                logger.info(f"Opções oferecidas ao cliente: {opcoes}")
-                return texto_opcoes, escalar, agendamento, opcoes
+            # Se as opções ou o link foram mostrados com sucesso, essa é a
+            # mensagem final — não pedimos mais um texto ao modelo por cima
+            if opcoes or link_botao:
+                logger.info(f"Curto-circuito: opções={opcoes} link_botao={link_botao}")
+                return texto_curto_circuito, escalar, agendamento, opcoes, link_botao
 
             mensajes.append({"role": "user", "content": resultados_tool})
             response = await client.messages.create(
@@ -401,8 +437,8 @@ async def generar_respuesta(
 
         texto = next((b.text for b in response.content if b.type == "text"), "")
         logger.info(f"Respuesta generada ({response.usage.input_tokens} in / {response.usage.output_tokens} out)")
-        return texto, escalar, agendamento, None
+        return texto, escalar, agendamento, None, None
 
     except Exception as e:
         logger.error(f"Error Claude API: {e}")
-        return obtener_mensaje_error(), False, None, None
+        return obtener_mensaje_error(), False, None, None, None

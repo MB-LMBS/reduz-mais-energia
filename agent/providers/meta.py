@@ -167,6 +167,35 @@ class ProveedorMeta(ProveedorWhatsApp):
                 logger.error(f"Error Meta API (botões): {r.status_code} — {r.text}")
             return r.status_code == 200
 
+    async def enviar_botao_link(self, telefono: str, texto: str, texto_botao: str, url: str) -> bool:
+        """Envía un mensaje com um botão que abre um link (WhatsApp CTA URL Button)."""
+        if not self.access_token or not self.phone_number_id:
+            logger.warning("META_ACCESS_TOKEN o META_PHONE_NUMBER_ID no configurados")
+            return False
+        url_api = f"https://graph.facebook.com/{self.api_version}/{self.phone_number_id}/messages"
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": telefono,
+            "type": "interactive",
+            "interactive": {
+                "type": "cta_url",
+                "body": {"text": texto},
+                "action": {
+                    "name": "cta_url",
+                    "parameters": {"display_text": texto_botao[:20], "url": url},
+                },
+            },
+        }
+        async with httpx.AsyncClient() as client:
+            r = await client.post(url_api, json=payload, headers=headers)
+            if r.status_code != 200:
+                logger.error(f"Error Meta API (botão link): {r.status_code} — {r.text}")
+            return r.status_code == 200
+
     async def enviar_documento(
         self, telefono: str, ficheiro: bytes, nome_ficheiro: str,
         mime_type: str, legenda: str = ""
