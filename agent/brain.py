@@ -52,6 +52,13 @@ SIMULADORES = {
         ),
         "texto_botao": "Ver simulador GN",
     },
+    "solar_fotovoltaico": {
+        "url": (
+            "https://reduz-mais-energia.neocities.org/Reduz+%20Energia/"
+            "Simuladores%20Energia/Smart%20Solar%20Empresarial%20&%20Residencial"
+        ),
+        "texto_botao": "Ver simulador solar",
+    },
 }
 
 # Herramientas que el modelo puede activar durante la conversación
@@ -157,9 +164,14 @@ HERRAMIENTAS = [
             "potência/tensão são das gamas mais altas que exigem proposta à "
             "medida (ver a mesma secção); 'gas_natural' quando o cliente "
             "(particular ou empresa) procura gás natural, em qualquer "
-            "escalão (1, 2, 3 ou 4); 'geral' para todos os outros casos "
-            "(solar, ou quando ainda não sabes a potência/nível de tensão "
-            "do cliente para eletricidade)."
+            "escalão (1, 2, 3 ou 4); 'solar_fotovoltaico' quando o cliente "
+            "(particular ou empresa) procura uma solução solar fotovoltaica "
+            "com fornecimento e instalação, com investimento próprio, e já "
+            "sabes ou estimaste quantos painéis (ver secção 'Propostas de "
+            "energia solar fotovoltaica' no teu contexto); 'geral' para "
+            "todos os outros casos (ex: ainda não sabes a potência/nível de "
+            "tensão do cliente para eletricidade, ou solar sem investimento "
+            "próprio/comunidades solares)."
         ),
         "input_schema": {
             "type": "object",
@@ -173,7 +185,10 @@ HERRAMIENTAS = [
                 },
                 "tipo": {
                     "type": "string",
-                    "enum": ["geral", "eletricidade_btn", "eletricidade_personalizada", "gas_natural"],
+                    "enum": [
+                        "geral", "eletricidade_btn", "eletricidade_personalizada",
+                        "gas_natural", "solar_fotovoltaico",
+                    ],
                     "description": "Qual simulador mostrar — ver descrição da ferramenta.",
                 },
             },
