@@ -455,6 +455,9 @@ async def ver_conversa(telefono: str, auth: bool = Depends(verificar_password)):
         var telefone = {telefono!r};
         var container = document.getElementById('mensagens');
 
+        // Abre sempre já posicionado na mensagem mais recente
+        window.scrollTo(0, document.body.scrollHeight);
+
         function ultimoIdAtual() {{
           var nos = container.querySelectorAll('[data-msg-id]');
           if (!nos.length) return 0;
