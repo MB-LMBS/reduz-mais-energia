@@ -21,7 +21,7 @@ from dotenv import load_dotenv
 from agent.brain import generar_respuesta
 from agent.agenda import formatar_slot
 from agent.memory import (
-    inicializar_db, guardar_mensaje, obtener_historial, obtener_modo, establecer_modo,
+    inicializar_db, guardar_mensaje, obtener_historial, obtener_modo,
     establecer_nome_contato, obtener_nome_contato, obter_agendamentos_a_lembrar,
     marcar_lembrete_enviado, criar_alerta, guardar_evento_outlook_id,
 )
@@ -220,10 +220,10 @@ async def webhook_handler(request: Request):
             logger.info(f"Respuesta a {msg.telefono}: {respuesta}")
 
             # Si el cliente pidió/aceptó hablar con un consultor, reenviamos
-            # la conversación completa y pausamos el bot en esa conversación
+            # la conversación completa — el bot sigue a responder por defeito,
+            # só passa a modo manual se o consultor o alternar manualmente no painel
             if escalar:
                 await notificar_consultor(proveedor, msg.telefono, historial, msg.texto, motivo_escalada)
-                await establecer_modo(msg.telefono, "manual")
                 await criar_alerta(
                     "escalada", msg.telefono,
                     f"🔔 {nome_contato or msg.telefono} pediu para falar com um consultor",
