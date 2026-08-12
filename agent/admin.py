@@ -33,7 +33,12 @@ from agent.memory import (
 from agent.agenda import formatar_slot
 from agent.providers import obtener_proveedor
 from agent.notificacoes import notificar_consultor, NUMERO_CONSULTOR
-from agent.calendario import apagar_evento_chamada
+from agent.calendario import apagar_evento_chamada as apagar_evento_icloud
+from agent.outlook_calendar import (
+    apagar_evento_chamada as apagar_evento_outlook,
+    outlook_configurado, esta_ligado as outlook_esta_ligado,
+    gerar_url_autorizacao, concluir_autorizacao,
+)
 
 logger = logging.getLogger("agentkit")
 router = APIRouter(prefix="/admin")
@@ -129,6 +134,8 @@ ESTILO = """
   .agendamento .info { margin-top: 6px; font-size: 0.9rem; white-space: pre-wrap; }
   .btn-cancelar { margin-top: 8px; padding: 6px 12px; border-radius: 6px; border: 1px solid #c0392b;
                    background: white; color: #c0392b; font-size: 0.85rem; }
+  .sync-ok { color: #0a7d4f; font-size: 0.9rem; }
+  .sync-aviso { color: #a5701d; font-size: 0.9rem; background: #fff8e1; padding: 8px 12px; border-radius: 8px; }
 
   /* Página de conversa: cabeçalho fixo no topo, mensagens com scroll próprio,
      caixa de resposta fixa em baixo — como numa app de chat normal */
@@ -329,6 +336,17 @@ async def agenda(auth: bool = Depends(verificar_password)):
     if not agendamentos:
         linhas = "<p>Sem chamadas agendadas de momento.</p>"
 
+    estado_outlook = ""
+    if outlook_configurado():
+        ligado = await outlook_esta_ligado()
+        if ligado:
+            estado_outlook = '<p class="sync-ok">✅ Sincronizado com o Outlook Calendar</p>'
+        else:
+            estado_outlook = (
+                '<p class="sync-aviso">⚠️ Outlook ainda não autorizado — '
+                '<a href="/admin/outlook/conectar">clique aqui para ligar</a></p>'
+            )
+
     return f"""
     <html>
     <head><title>Agenda — Reduz+ Energia</title>{ESTILO}
@@ -336,18 +354,49 @@ async def agenda(auth: bool = Depends(verificar_password)):
     <body>
       <a href="/admin/">&larr; Conversas</a>
       <h1>Próximas chamadas agendadas</h1>
+      {estado_outlook}
       {linhas}
     </body>
     </html>
     """
 
 
+@router.get("/outlook/conectar")
+async def outlook_conectar(auth: bool = Depends(verificar_password)):
+    """Inicia a autorização OAuth com a Microsoft — o utilizador tem de fazer login e aceitar."""
+    if not outlook_configurado():
+        raise HTTPException(status_code=500, detail="AZURE_CLIENT_ID/SECRET/TENANT_ID não configurados")
+    url = await gerar_url_autorizacao()
+    return RedirectResponse(url=url, status_code=303)
+
+
+@router.get("/outlook/callback", response_class=HTMLResponse)
+async def outlook_callback(code: str | None = None, error: str | None = None, auth: bool = Depends(verificar_password)):
+    """Recebe o redirecionamento da Microsoft depois do login/autorização."""
+    if error or not code:
+        return f"""
+        <html><body>
+          <p>Erro ao ligar ao Outlook: {html.escape(error or 'código em falta')}</p>
+          <a href="/admin/agenda">&larr; Voltar à agenda</a>
+        </body></html>
+        """
+    sucesso = await concluir_autorizacao(code)
+    mensagem = "Outlook ligado com sucesso! ✅" if sucesso else "Não foi possível ligar ao Outlook. Tente novamente."
+    return f"""
+    <html><body>
+      <p>{mensagem}</p>
+      <a href="/admin/agenda">&larr; Voltar à agenda</a>
+    </body></html>
+    """
+
+
 @router.post("/agenda/{agendamento_id}/cancelar")
 async def cancelar_chamada(agendamento_id: int, auth: bool = Depends(verificar_password)):
-    """Cancela uma chamada agendada e remove o evento correspondente do iCloud Calendar."""
+    """Cancela uma chamada agendada e remove o evento correspondente do calendário (iCloud e/ou Outlook)."""
     cancelado = await cancelar_agendamento(agendamento_id)
     if cancelado:
-        await apagar_evento_chamada(agendamento_id)
+        await apagar_evento_icloud(agendamento_id)
+        await apagar_evento_outlook(cancelado.get("evento_outlook_id"))
         logger.info(f"Chamada cancelada: agendamento {agendamento_id}")
     return RedirectResponse(url="/admin/agenda", status_code=303)
 

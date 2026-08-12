@@ -23,11 +23,12 @@ from agent.agenda import formatar_slot
 from agent.memory import (
     inicializar_db, guardar_mensaje, obtener_historial, obtener_modo, establecer_modo,
     establecer_nome_contato, obtener_nome_contato, obter_agendamentos_a_lembrar,
-    marcar_lembrete_enviado, criar_alerta,
+    marcar_lembrete_enviado, criar_alerta, guardar_evento_outlook_id,
 )
 from agent.providers import obtener_proveedor
 from agent.notificacoes import notificar_consultor, notificar_agendamento, notificar_lembrete_chamada
-from agent.calendario import criar_evento_chamada
+from agent.calendario import criar_evento_chamada as criar_evento_icloud
+from agent.outlook_calendar import criar_evento_chamada as criar_evento_outlook
 from agent.admin import router as admin_router
 
 load_dotenv()
@@ -216,10 +217,16 @@ async def webhook_handler(request: Request):
                     "agendamento", msg.telefono,
                     f"📅 Chamada agendada com {nome} para {formatar_slot(agendamento['data_hora'])}",
                 )
-                await criar_evento_chamada(
+                await criar_evento_icloud(
                     agendamento["id"], agendamento.get("nome_cliente"),
                     agendamento["telefono"], agendamento["data_hora"], agendamento["informacao"],
                 )
+                evento_outlook_id = await criar_evento_outlook(
+                    agendamento["id"], agendamento.get("nome_cliente"),
+                    agendamento["telefono"], agendamento["data_hora"], agendamento["informacao"],
+                )
+                if evento_outlook_id:
+                    await guardar_evento_outlook_id(agendamento["id"], evento_outlook_id)
 
         return {"status": "ok"}
 

@@ -74,6 +74,16 @@ class Agendamento(Base):
     estado: Mapped[str] = mapped_column(String(20), default="agendado")  # agendado, realizado, cancelado
     # Se já foi enviado o lembrete ao consultor pouco antes da chamada
     lembrete_enviado: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Id do evento no Outlook/Microsoft 365 (Graph API), para poder apagá-lo se a chamada for cancelada
+    evento_outlook_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+
+class ConfigApp(Base):
+    """Pares chave/valor para configuração persistente (ex: cache de tokens OAuth)."""
+    __tablename__ = "config_app"
+
+    chave: Mapped[str] = mapped_column(String(100), primary_key=True)
+    valor: Mapped[str] = mapped_column(Text)
 
 
 class Alerta(Base):
@@ -386,7 +396,35 @@ async def cancelar_agendamento(agendamento_id: int) -> dict | None:
             "nome_cliente": agendamento.nome_cliente,
             "data_hora": agendamento.data_hora,
             "informacao": agendamento.informacao,
+            "evento_outlook_id": agendamento.evento_outlook_id,
         }
+
+
+async def guardar_evento_outlook_id(agendamento_id: int, evento_outlook_id: str):
+    """Guarda o id do evento criado no Outlook, para o poder apagar mais tarde."""
+    async with async_session() as session:
+        agendamento = await session.get(Agendamento, agendamento_id)
+        if agendamento:
+            agendamento.evento_outlook_id = evento_outlook_id
+            await session.commit()
+
+
+async def obter_config(chave: str) -> str | None:
+    """Lê um valor de configuração persistente (ex: cache de tokens OAuth)."""
+    async with async_session() as session:
+        config = await session.get(ConfigApp, chave)
+        return config.valor if config else None
+
+
+async def definir_config(chave: str, valor: str):
+    """Grava um valor de configuração persistente."""
+    async with async_session() as session:
+        config = await session.get(ConfigApp, chave)
+        if config:
+            config.valor = valor
+        else:
+            session.add(ConfigApp(chave=chave, valor=valor))
+        await session.commit()
 
 
 async def listar_agendamentos(apenas_futuros: bool = True) -> list[dict]:
