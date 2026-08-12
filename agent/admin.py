@@ -15,13 +15,16 @@ import uuid
 import secrets
 import logging
 import mimetypes
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, HTTPException, Form, File, UploadFile
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 
 from agent.memory import (
     listar_conversaciones, obtener_historial, obtener_modo, establecer_modo,
-    obtener_estado, establecer_estado, obtener_nome_contato, guardar_mensaje,
+    obtener_estado, establecer_estado, obtener_nome_contato, obtener_categoria,
+    establecer_categoria, CATEGORIAS_VALIDAS, guardar_mensaje,
 )
 from agent.providers import obtener_proveedor
 
@@ -54,11 +57,18 @@ ESTILO = """
   .cabecalho .avatar { width: 48px; height: 48px; font-size: 1.1rem; }
   .cabecalho .nome { font-size: 1.2rem; font-weight: 600; }
   .cabecalho .tel { color: #666; font-size: 0.85rem; }
-  .badges { display: flex; gap: 6px; }
+  .badges { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
   .badge { font-size: 0.75rem; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
   .badge.bot { background: #e3f2e9; color: #0a7d4f; }
   .badge.manual { background: #fdeaea; color: #c0392b; }
   .badge.tratada { background: #e9e9e9; color: #666; }
+  .badge.interessado { background: #fdf2df; color: #a5701d; }
+  .badge.ganho { background: #e3f2e9; color: #0a7d4f; }
+  .badge.perdido { background: #fdeaea; color: #c0392b; }
+  .filtros { display: flex; gap: 6px; margin-bottom: 12px; overflow-x: auto; padding-bottom: 2px; }
+  .filtros a { flex-shrink: 0; padding: 6px 12px; border-radius: 20px; background: white; color: #444;
+               font-size: 0.85rem; border: 1px solid #ddd; }
+  .filtros a.ativo { background: #1a1a1a; color: white; border-color: #1a1a1a; }
   .preview { color: #666; font-size: 0.9rem; margin-top: 4px; white-space: nowrap; overflow: hidden;
              text-overflow: ellipsis; }
   .msg { padding: 8px 12px; border-radius: 10px; margin-bottom: 8px; max-width: 80%; }
@@ -67,6 +77,7 @@ ESTILO = """
   .msg.humano { background: #cfe8ff; margin-left: auto; }
   .msg img { max-width: 100%; border-radius: 8px; display: block; margin-bottom: 4px; }
   .msg .ficheiro { display: block; font-size: 0.85rem; }
+  .msg .hora { display: block; font-size: 0.7rem; color: #999; margin-top: 3px; text-align: right; }
   form.reply { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; position: sticky; bottom: 0;
                background: #f5f5f5; padding: 8px 0; }
   form.reply textarea { flex: 1; min-width: 140px; padding: 10px; border-radius: 8px; border: 1px solid #ccc;
@@ -74,9 +85,13 @@ ESTILO = """
   form.reply button { padding: 0 16px; border-radius: 8px; border: none; background: #0a7d4f; color: white; }
   form.reply .anexo { flex-basis: 100%; font-size: 0.85rem; }
   .toggle { display: flex; gap: 8px; align-items: center; margin: 8px 0; flex-wrap: wrap; }
+  .toggle.separador { padding-top: 8px; border-top: 1px solid #ddd; }
   .toggle button { padding: 6px 12px; border-radius: 8px; border: 1px solid #ccc; background: white; }
   .toggle button.ativo { background: #0a7d4f; color: white; border-color: #0a7d4f; }
   .toggle button.tratada.ativo { background: #666; border-color: #666; }
+  .toggle button.interessado.ativo { background: #a5701d; border-color: #a5701d; }
+  .toggle button.ganho.ativo { background: #0a7d4f; border-color: #0a7d4f; }
+  .toggle button.perdido.ativo { background: #c0392b; border-color: #c0392b; }
 </style>
 """
 
@@ -112,11 +127,20 @@ def verificar_password(credentials: HTTPBasicCredentials = Depends(security)):
     return True
 
 
+NOMES_CATEGORIA = {
+    "sem_categoria": "Sem categoria",
+    "interessado": "Com interesse",
+    "ganho": "Ganho",
+    "perdido": "Perdido",
+}
+
+
 @router.get("/", response_class=HTMLResponse)
-async def painel(estado: str = "aberta", auth: bool = Depends(verificar_password)):
-    """Lista as conversas do estado escolhido (aberta ou tratada), mais recente primeiro."""
+async def painel(estado: str = "aberta", categoria: str = "todas", auth: bool = Depends(verificar_password)):
+    """Lista as conversas do estado escolhido, com filtro opcional por categoria comercial."""
     todas = await listar_conversaciones()
-    conversas = [c for c in todas if c["estado"] == estado]
+    do_estado = [c for c in todas if c["estado"] == estado]
+    conversas = do_estado if categoria == "todas" else [c for c in do_estado if c["categoria"] == categoria]
     n_abertas = sum(1 for c in todas if c["estado"] == "aberta")
     n_tratadas = sum(1 for c in todas if c["estado"] == "tratada")
 
@@ -127,6 +151,9 @@ async def painel(estado: str = "aberta", auth: bool = Depends(verificar_password
             preview = f"[{c.get('ultimo_tipo', 'ficheiro')}]"
         badge_classe = "manual" if c["modo"] == "manual" else "bot"
         badge_texto = "Manual" if c["modo"] == "manual" else "Bot"
+        badges_extra = ""
+        if c["categoria"] != "sem_categoria":
+            badges_extra = f'<span class="badge {c["categoria"]}">{NOMES_CATEGORIA[c["categoria"]]}</span>'
         nome = c.get("nome_contato")
         titulo = html.escape(nome) if nome else html.escape(c["telefono"])
         linhas += f"""
@@ -135,7 +162,7 @@ async def painel(estado: str = "aberta", auth: bool = Depends(verificar_password
           <div class="corpo">
             <div class="top">
               <span class="tel">{titulo}</span>
-              <span class="badges"><span class="badge {badge_classe}">{badge_texto}</span></span>
+              <span class="badges"><span class="badge {badge_classe}">{badge_texto}</span>{badges_extra}</span>
             </div>
             <div class="preview">{preview}</div>
           </div>
@@ -145,6 +172,11 @@ async def painel(estado: str = "aberta", auth: bool = Depends(verificar_password
     if not conversas:
         linhas = "<p>Sem conversas aqui.</p>"
 
+    filtros_categoria = "".join(
+        f'<a href="/admin/?estado={estado}&categoria={chave}" class="{"ativo" if categoria == chave else ""}">{nome}</a>'
+        for chave, nome in [("todas", "Todas"), *NOMES_CATEGORIA.items()]
+    )
+
     return f"""
     <html>
     <head><title>Conversas — Reduz+ Energia</title>{ESTILO}
@@ -152,17 +184,29 @@ async def painel(estado: str = "aberta", auth: bool = Depends(verificar_password
     <body>
       <h1>Conversas</h1>
       <div class="tabs">
-        <a href="/admin/?estado=aberta" class="{'ativo' if estado == 'aberta' else ''}">Em aberto ({n_abertas})</a>
-        <a href="/admin/?estado=tratada" class="{'ativo' if estado == 'tratada' else ''}">Tratadas ({n_tratadas})</a>
+        <a href="/admin/?estado=aberta&categoria={categoria}" class="{'ativo' if estado == 'aberta' else ''}">Em aberto ({n_abertas})</a>
+        <a href="/admin/?estado=tratada&categoria={categoria}" class="{'ativo' if estado == 'tratada' else ''}">Tratadas ({n_tratadas})</a>
       </div>
+      <div class="filtros">{filtros_categoria}</div>
       {linhas}
     </body>
     </html>
     """
 
 
+def _formatar_hora(timestamp: datetime | None) -> str:
+    """Converte um timestamp UTC guardado na base de dados para hora de Portugal, formatada."""
+    if not timestamp:
+        return ""
+    hora_local = timestamp.replace(tzinfo=ZoneInfo("UTC")).astimezone(ZoneInfo("Europe/Lisbon"))
+    hoje = datetime.now(ZoneInfo("Europe/Lisbon")).date()
+    if hora_local.date() == hoje:
+        return hora_local.strftime("%H:%M")
+    return hora_local.strftime("%d/%m %H:%M")
+
+
 def _render_mensagem(msg: dict) -> str:
-    """Gera o HTML de uma mensagem, incluindo pré-visualização de ficheiros."""
+    """Gera o HTML de uma mensagem, incluindo pré-visualização de ficheiros e hora."""
     classe = "user" if msg["role"] == "user" else ("humano" if msg["role"] == "humano" else "assistant")
     partes = ""
 
@@ -178,6 +222,8 @@ def _render_mensagem(msg: dict) -> str:
     if msg["content"]:
         partes += html.escape(msg["content"])
 
+    partes += f'<small class="hora">{_formatar_hora(msg.get("timestamp"))}</small>'
+
     return f'<div class="msg {classe}">{partes}</div>'
 
 
@@ -187,6 +233,7 @@ async def ver_conversa(telefono: str, auth: bool = Depends(verificar_password)):
     historico = await obtener_historial(telefono, limite=100)
     modo = await obtener_modo(telefono)
     estado = await obtener_estado(telefono)
+    categoria = await obtener_categoria(telefono)
     nome = await obtener_nome_contato(telefono)
 
     mensagens_html = "".join(_render_mensagem(msg) for msg in historico)
@@ -225,6 +272,16 @@ async def ver_conversa(telefono: str, auth: bool = Depends(verificar_password)):
         </form>
       </div>
 
+      <div class="toggle separador">
+        {"".join(
+            f'''<form method="post" action="/admin/conversa/{telefono}/categoria">
+                  <input type="hidden" name="categoria" value="{chave}">
+                  <button type="submit" class="{chave} {'ativo' if categoria == chave else ''}">{nome}</button>
+                </form>'''
+            for chave, nome in NOMES_CATEGORIA.items()
+        )}
+      </div>
+
       {mensagens_html}
 
       <form class="reply" method="post" action="/admin/conversa/{telefono}/responder" enctype="multipart/form-data">
@@ -252,6 +309,15 @@ async def mudar_estado(telefono: str, estado: str = Form(...), auth: bool = Depe
     if estado not in ("aberta", "tratada"):
         raise HTTPException(status_code=400, detail="Estado inválido")
     await establecer_estado(telefono, estado)
+    return RedirectResponse(url=f"/admin/conversa/{telefono}", status_code=303)
+
+
+@router.post("/conversa/{telefono}/categoria")
+async def mudar_categoria(telefono: str, categoria: str = Form(...), auth: bool = Depends(verificar_password)):
+    """Muda a categoria comercial da conversa: sem_categoria, interessado, ganho ou perdido."""
+    if categoria not in CATEGORIAS_VALIDAS:
+        raise HTTPException(status_code=400, detail="Categoria inválida")
+    await establecer_categoria(telefono, categoria)
     return RedirectResponse(url=f"/admin/conversa/{telefono}", status_code=303)
 
 

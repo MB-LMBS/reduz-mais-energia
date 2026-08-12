@@ -55,6 +55,8 @@ class Conversacion(Base):
     modo: Mapped[str] = mapped_column(String(10), default="bot")      # "bot" o "manual"
     estado: Mapped[str] = mapped_column(String(10), default="aberta")  # "aberta" o "tratada"
     nome_contato: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # Categoría comercial: "sem_categoria", "interessado", "ganho" o "perdido"
+    categoria: Mapped[str] = mapped_column(String(20), default="sem_categoria")
 
 
 def _columnas_existentes(conn, tabla: str) -> set[str]:
@@ -130,6 +132,7 @@ async def obtener_historial(telefono: str, limite: int = 20) -> list[dict]:
                 "tipo": msg.tipo,
                 "media_path": msg.media_path,
                 "nome_ficheiro": msg.nome_ficheiro,
+                "timestamp": msg.timestamp,
             }
             for msg in mensajes
         ]
@@ -203,6 +206,31 @@ async def establecer_nome_contato(telefono: str, nome: str):
         await session.commit()
 
 
+CATEGORIAS_VALIDAS = ("sem_categoria", "interessado", "ganho", "perdido")
+
+
+async def obtener_categoria(telefono: str) -> str:
+    """Retorna la categoría comercial actual: 'sem_categoria' (default), 'interessado', 'ganho' o 'perdido'."""
+    async with async_session() as session:
+        query = select(Conversacion).where(Conversacion.telefono == telefono)
+        result = await session.execute(query)
+        conversacion = result.scalar_one_or_none()
+        return conversacion.categoria if conversacion else "sem_categoria"
+
+
+async def establecer_categoria(telefono: str, categoria: str):
+    """Cambia la categoría comercial de una conversación."""
+    async with async_session() as session:
+        query = select(Conversacion).where(Conversacion.telefono == telefono)
+        result = await session.execute(query)
+        conversacion = result.scalar_one_or_none()
+        if conversacion:
+            conversacion.categoria = categoria
+        else:
+            session.add(Conversacion(telefono=telefono, categoria=categoria))
+        await session.commit()
+
+
 async def listar_conversaciones() -> list[dict]:
     """
     Lista todas las conversaciones con su último mensaje, modo y estado,
@@ -230,6 +258,7 @@ async def listar_conversaciones() -> list[dict]:
             modo = await obtener_modo(msg.telefono)
             estado = await obtener_estado(msg.telefono)
             nome_contato = await obtener_nome_contato(msg.telefono)
+            categoria = await obtener_categoria(msg.telefono)
             conversaciones.append({
                 "telefono": msg.telefono,
                 "ultimo_mensaje": msg.content,
@@ -239,6 +268,7 @@ async def listar_conversaciones() -> list[dict]:
                 "modo": modo,
                 "estado": estado,
                 "nome_contato": nome_contato,
+                "categoria": categoria,
             })
         return conversaciones
 
