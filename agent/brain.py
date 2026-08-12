@@ -23,11 +23,22 @@ logger = logging.getLogger("agentkit")
 # Cliente de Anthropic
 client = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
-URL_SIMULADOR = (
-    "https://reduz-mais-energia.neocities.org/Reduz+%20Energia/"
-    "Simuladores%20Energia/Cart%C3%A3o_Simulador"
-)
-TEXTO_BOTAO_SIMULADOR = "Ver simulador"
+SIMULADORES = {
+    "geral": {
+        "url": (
+            "https://reduz-mais-energia.neocities.org/Reduz+%20Energia/"
+            "Simuladores%20Energia/Cart%C3%A3o_Simulador"
+        ),
+        "texto_botao": "Ver simulador",
+    },
+    "eletricidade_btn": {
+        "url": (
+            "https://reduz-mais-energia.neocities.org/Reduz+%20Energia/"
+            "Simuladores%20Energia/EE_Campanhas"
+        ),
+        "texto_botao": "Ver simulador EE",
+    },
+}
 
 # Herramientas que el modelo puede activar durante la conversación
 HERRAMIENTAS = [
@@ -120,10 +131,14 @@ HERRAMIENTAS = [
     {
         "name": "enviar_link_simulador",
         "description": (
-            "Usa esta ferramenta sempre que quiseres partilhar o link do "
-            "simulador de campanhas com o cliente. Mostra um botão clicável "
-            "'Ver simulador' em vez de escreveres o link em texto — mais "
-            "fácil de abrir a partir do WhatsApp no telemóvel."
+            "Usa esta ferramenta sempre que quiseres partilhar um link de "
+            "simulador com o cliente. Mostra um botão clicável em vez de "
+            "escreveres o link em texto — mais fácil de abrir a partir do "
+            "WhatsApp no telemóvel. Escolhe o tipo consoante o caso: "
+            "'eletricidade_btn' quando o cliente procura uma proposta de "
+            "eletricidade com nível de tensão BTN e já sabes a potência "
+            "contratada; 'geral' para todos os outros casos (gás, solar, ou "
+            "quando ainda não sabes a potência/nível de tensão do cliente)."
         ),
         "input_schema": {
             "type": "object",
@@ -135,8 +150,13 @@ HERRAMIENTAS = [
                         "consultar as opções e campanhas disponíveis)."
                     ),
                 },
+                "tipo": {
+                    "type": "string",
+                    "enum": ["geral", "eletricidade_btn"],
+                    "description": "Qual simulador mostrar — ver descrição da ferramenta.",
+                },
             },
-            "required": ["mensagem"],
+            "required": ["mensagem", "tipo"],
         },
     },
 ]
@@ -408,9 +428,11 @@ async def generar_respuesta(
                 elif tool_use.name == "enviar_link_simulador":
                     mensagem_link = (tool_use.input.get("mensagem") or "").strip() or \
                         "Veja as opções e campanhas disponíveis:"
+                    tipo_simulador = tool_use.input.get("tipo") or "geral"
+                    simulador = SIMULADORES.get(tipo_simulador, SIMULADORES["geral"])
                     texto_curto_circuito = mensagem_link
-                    link_botao = {"texto_botao": TEXTO_BOTAO_SIMULADOR, "url": URL_SIMULADOR}
-                    resultado_texto = "Botão do simulador mostrado ao cliente."
+                    link_botao = {"texto_botao": simulador["texto_botao"], "url": simulador["url"]}
+                    resultado_texto = f"Botão do simulador ({tipo_simulador}) mostrado ao cliente."
                 else:
                     resultado_texto = "Ferramenta desconhecida."
 
