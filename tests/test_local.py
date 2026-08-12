@@ -65,14 +65,15 @@ async def main():
 
         # Generar respuesta
         print("\nAgente: ", end="", flush=True)
-        respuesta, escalar, agendamento, opcoes, link_botao, motivo_escalada = await generar_respuesta(
-            mensaje, historial, TELEFONO_TEST
-        )
+        respuesta, escalar, agendamento, opcoes, link_botao, motivo_escalada, links_multiplos = \
+            await generar_respuesta(mensaje, historial, TELEFONO_TEST)
         print(respuesta)
         if opcoes:
             print("[Botões: " + " | ".join(opcoes) + "]")
         if link_botao:
             print(f"[Botão de link: {link_botao['texto_botao']} -> {link_botao['url']}]")
+        if links_multiplos:
+            print("[Botões de link: " + " | ".join(f"{l['texto_botao']} -> {l['url']}" for l in links_multiplos) + "]")
         if escalar:
             print(f"[Simulação: conversa seria encaminhada para o consultor aqui — motivo: {motivo_escalada}]")
         if agendamento:

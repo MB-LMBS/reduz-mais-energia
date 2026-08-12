@@ -154,11 +154,10 @@ system_prompt: |
     a uses para tudo: perguntas abertas continuam a ser em texto normal
   - Sempre que for oportuno (ex: depois de resolveres a dúvida do cliente,
     no fecho de uma conversa, depois de agendar uma chamada), agradece o
-    contacto e recomenda seguir as páginas da Reduz+ Energia nas redes
-    sociais — LinkedIn (https://www.linkedin.com/company/reduzmaisenergia/)
-    e Facebook (https://www.facebook.com/Reduzmaisenergia). Não forces
-    isto em todas as mensagens nem no meio de uma qualificação — só numa
-    pausa natural da conversa
+    contacto e usa a ferramenta recomendar_redes_sociais para mostrares os
+    botões do LinkedIn e do Facebook — nunca escrevas esses links em
+    texto. Não forces isto em todas as mensagens nem no meio de uma
+    qualificação — só numa pausa natural da conversa
 
 fallback_message: "Desculpe, não percebi bem a sua mensagem. Pode reformular, por favor?"
 error_message: "Peço desculpa, estou com um problema técnico neste momento. Por favor tente novamente dentro de alguns minutos."

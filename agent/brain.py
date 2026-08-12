@@ -61,6 +61,11 @@ SIMULADORES = {
     },
 }
 
+REDES_SOCIAIS = [
+    {"texto_botao": "LinkedIn", "url": "https://www.linkedin.com/company/reduzmaisenergia/"},
+    {"texto_botao": "Facebook", "url": "https://www.facebook.com/Reduzmaisenergia"},
+]
+
 # Herramientas que el modelo puede activar durante la conversación
 HERRAMIENTAS = [
     {
@@ -193,6 +198,26 @@ HERRAMIENTAS = [
                 },
             },
             "required": ["mensagem", "tipo"],
+        },
+    },
+    {
+        "name": "recomendar_redes_sociais",
+        "description": (
+            "Usa esta ferramenta para recomendares as páginas da Reduz+ "
+            "Energia no LinkedIn e no Facebook — normalmente numa pausa "
+            "natural da conversa, ex: depois de agradeceres ao cliente ou "
+            "no fecho da conversa. Mostra dois botões clicáveis (um para "
+            "cada rede social) em vez de escreveres os links em texto."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "mensagem": {
+                    "type": "string",
+                    "description": "Texto curto de agradecimento/despedida a acompanhar os botões.",
+                },
+            },
+            "required": ["mensagem"],
         },
     },
 ]
@@ -374,7 +399,7 @@ async def _processar_agendamento(entrada: dict, telefono: str) -> tuple[str, dic
 
 async def generar_respuesta(
     mensaje: str, historial: list[dict], telefono: str, nome_contato: str | None = None
-) -> tuple[str, bool, dict | None, list[str] | None, dict | None]:
+) -> tuple[str, bool, dict | None, list[str] | None, dict | None, str | None, list[dict] | None]:
     """
     Genera una respuesta usando Claude API.
 
@@ -386,17 +411,19 @@ async def generar_respuesta(
 
     Returns:
         Tupla (respuesta, escalar_a_consultor, agendamento, opcoes, link_botao,
-        motivo_escalada) — escalar_a_consultor es True si el cliente pidió/aceptó
-        hablar con un consultor humano; agendamento es None o un dict con los
-        detalles de una chamada recién marcada; opcoes es None o una lista de
-        2-3 respostas curtas para mostrar como botões de resposta rápida;
-        link_botao es None ou um dict {"texto_botao", "url"} para mostrar um
-        botão que abre um link; motivo_escalada é None ou o motivo da escalada
-        (para dar contexto ao consultor na notificação).
+        motivo_escalada, links_multiplos) — escalar_a_consultor es True si el
+        cliente pidió/aceptó hablar con un consultor humano; agendamento es
+        None o un dict con los detalles de una chamada recién marcada; opcoes
+        es None o una lista de 2-3 respostas curtas para mostrar como botões
+        de resposta rápida; link_botao es None ou um dict {"texto_botao",
+        "url"} para mostrar um botão que abre um link; motivo_escalada é None
+        ou o motivo da escalada; links_multiplos é None ou uma lista de dicts
+        {"texto_botao", "url"} para mostrar vários botões de link (um por
+        mensagem, ex: redes sociais).
     """
     # Si el mensaje es muy corto o vacío, usar fallback
     if not mensaje or len(mensaje.strip()) < 2:
-        return obtener_mensaje_fallback(), False, None, None, None, None
+        return obtener_mensaje_fallback(), False, None, None, None, None, None
 
     system_prompt = await cargar_system_prompt(nome_contato, primeira_mensagem=not historial)
 
@@ -424,6 +451,7 @@ async def generar_respuesta(
     opcoes = None
     link_botao = None
     motivo_escalada = None
+    links_multiplos = None
 
     try:
         response = await client.messages.create(
@@ -473,6 +501,12 @@ async def generar_respuesta(
                     texto_curto_circuito = mensagem_link
                     link_botao = {"texto_botao": simulador["texto_botao"], "url": simulador["url"]}
                     resultado_texto = f"Botão do simulador ({tipo_simulador}) mostrado ao cliente."
+                elif tool_use.name == "recomendar_redes_sociais":
+                    mensagem_redes = (tool_use.input.get("mensagem") or "").strip() or \
+                        "Obrigado pelo contacto! Siga-nos nas redes sociais:"
+                    texto_curto_circuito = mensagem_redes
+                    links_multiplos = REDES_SOCIAIS
+                    resultado_texto = "Botões das redes sociais mostrados ao cliente."
                 else:
                     resultado_texto = "Ferramenta desconhecida."
 
@@ -482,11 +516,14 @@ async def generar_respuesta(
                     "content": resultado_texto,
                 })
 
-            # Se as opções ou o link foram mostrados com sucesso, essa é a
-            # mensagem final — não pedimos mais um texto ao modelo por cima
-            if opcoes or link_botao:
-                logger.info(f"Curto-circuito: opções={opcoes} link_botao={link_botao}")
-                return texto_curto_circuito, escalar, agendamento, opcoes, link_botao, motivo_escalada
+            # Se as opções ou algum link foram mostrados com sucesso, essa é
+            # a mensagem final — não pedimos mais um texto ao modelo por cima
+            if opcoes or link_botao or links_multiplos:
+                logger.info(
+                    f"Curto-circuito: opções={opcoes} link_botao={link_botao} "
+                    f"links_multiplos={links_multiplos}"
+                )
+                return texto_curto_circuito, escalar, agendamento, opcoes, link_botao, motivo_escalada, links_multiplos
 
             mensajes.append({"role": "user", "content": resultados_tool})
             response = await client.messages.create(

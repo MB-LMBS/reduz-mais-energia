@@ -192,9 +192,8 @@ async def webhook_handler(request: Request):
             historial = await obtener_historial(msg.telefono)
 
             # Generar respuesta con Claude
-            respuesta, escalar, agendamento, opcoes, link_botao, motivo_escalada = await generar_respuesta(
-                texto_para_ia, historial, msg.telefono, nome_contato
-            )
+            respuesta, escalar, agendamento, opcoes, link_botao, motivo_escalada, links_multiplos = \
+                await generar_respuesta(texto_para_ia, historial, msg.telefono, nome_contato)
 
             # Guardar mensaje del usuario Y respuesta del agente en memoria
             await guardar_mensaje(
@@ -204,8 +203,12 @@ async def webhook_handler(request: Request):
             await guardar_mensaje(msg.telefono, "assistant", respuesta)
 
             # Enviar respuesta por WhatsApp via el proveedor — com botões de
-            # resposta rápida ou de link quando o agente os usou
-            if link_botao:
+            # resposta rápida, de link, ou vários links (um por mensagem)
+            if links_multiplos:
+                for i, link in enumerate(links_multiplos):
+                    corpo = respuesta if i == 0 else f"E também no {link['texto_botao']}:"
+                    await proveedor.enviar_botao_link(msg.telefono, corpo, link["texto_botao"], link["url"])
+            elif link_botao:
                 await proveedor.enviar_botao_link(
                     msg.telefono, respuesta, link_botao["texto_botao"], link_botao["url"]
                 )
