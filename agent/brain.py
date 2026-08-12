@@ -14,7 +14,7 @@ from zoneinfo import ZoneInfo
 from anthropic import AsyncAnthropic
 from dotenv import load_dotenv
 
-from agent.agenda import proximos_horarios_disponiveis, formatar_slot, slot_e_valido
+from agent.agenda import proximos_horarios_disponiveis, formatar_slot, slot_e_valido, horario_minimo_permitido
 from agent.memory import criar_agendamento
 
 load_dotenv()
@@ -276,15 +276,16 @@ async def obtener_contexto_agenda() -> str:
         "cliente procura. Só ofereças a chamada depois de o cliente mostrar "
         "interesse real no serviço (ex: já perguntou sobre uma solução "
         "específica, quer avançar, ou pede para falar com alguém).\n"
-        "As chamadas são sempre à tarde (14h-18h), de Segunda a Sábado, em "
-        "blocos de 15 minutos. Os próximos horários livres são:\n"
+        "As chamadas são sempre à tarde (15h-19h), de Segunda a Sábado, em "
+        "blocos de 15 minutos, com pelo menos 1 hora de antecedência. Os "
+        "próximos horários livres são:\n"
         f"{linhas}\n"
         "Quando ofereceres, sugere apenas 2 ou 3 horários — não despejes uma "
         "lista longa. Confirma sempre com o cliente o horário exato, o nome "
         "dele e o motivo da chamada, e só depois usa a ferramenta "
         "agendar_chamada para a marcar. Se o cliente preferir outro dia/hora "
         "dentro da grelha, podes marcar diretamente — a ferramenta valida se "
-        "está mesmo livre."
+        "está mesmo livre e com antecedência suficiente."
     )
 
 
@@ -363,16 +364,16 @@ async def _processar_agendamento(entrada: dict, telefono: str) -> tuple[str, dic
     if not slot_e_valido(data_hora):
         return (
             "Não foi possível marcar: esse horário está fora da grelha permitida "
-            "(tardes de Segunda a Sábado, 14h-18h, blocos de 15 min). Sugere ao "
+            "(tardes de Segunda a Sábado, 15h-19h, blocos de 15 min). Sugere ao "
             "cliente um dos horários disponíveis listados no contexto.",
             None,
         )
 
-    agora = datetime.now(ZoneInfo("Europe/Lisbon")).replace(tzinfo=None)
-    if data_hora <= agora:
+    if data_hora < horario_minimo_permitido():
         return (
-            "Não foi possível marcar: esse horário já passou. Sugere ao cliente "
-            "um dos próximos horários disponíveis.",
+            "Não foi possível marcar: esse horário é demasiado próximo — "
+            "precisamos de pelo menos 1 hora de antecedência para o consultor "
+            "se preparar. Sugere ao cliente um horário mais à frente.",
             None,
         )
 
