@@ -8,20 +8,25 @@ Funciona con cualquier proveedor (Meta, Twilio) gracias a la capa de providers.
 
 import os
 import uuid
+import asyncio
 import mimetypes
 import logging
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import PlainTextResponse
 from dotenv import load_dotenv
 
 from agent.brain import generar_respuesta
+from agent.agenda import formatar_slot
 from agent.memory import (
     inicializar_db, guardar_mensaje, obtener_historial, obtener_modo, establecer_modo,
-    establecer_nome_contato, obtener_nome_contato,
+    establecer_nome_contato, obtener_nome_contato, obter_agendamentos_a_lembrar,
+    marcar_lembrete_enviado, criar_alerta,
 )
 from agent.providers import obtener_proveedor
-from agent.notificacoes import notificar_consultor, notificar_agendamento
+from agent.notificacoes import notificar_consultor, notificar_agendamento, notificar_lembrete_chamada
 from agent.admin import router as admin_router
 
 load_dotenv()
@@ -39,6 +44,36 @@ PORT = int(os.getenv("PORT", 8000))
 # Carpeta donde se guardan los archivos que envían los clientes (facturas, fotos, etc.)
 MEDIA_DIR = "data/media"
 os.makedirs(MEDIA_DIR, exist_ok=True)
+
+# Intervalo (segundos) entre verificaciones de llamadas agendadas próximas
+INTERVALO_LEMBRETES = 60
+
+
+async def loop_lembretes():
+    """
+    Verifica periodicamente se há chamadas agendadas a começar dentro de
+    5 minutos e ainda não lembradas, e envia um aviso ao consultor.
+    """
+    while True:
+        try:
+            agora = datetime.now(ZoneInfo("Europe/Lisbon")).replace(tzinfo=None)
+            pendentes = await obter_agendamentos_a_lembrar(agora)
+            for agendamento in pendentes:
+                enviado = await notificar_lembrete_chamada(proveedor, agendamento)
+                if enviado:
+                    await marcar_lembrete_enviado(agendamento["id"])
+                    nome = agendamento.get("nome_cliente") or agendamento["telefono"]
+                    await criar_alerta(
+                        "lembrete", agendamento["telefono"],
+                        f"⏰ Chamada em breve com {nome} às {formatar_slot(agendamento['data_hora'])}",
+                    )
+                    logger.info(
+                        f"Lembrete de chamada enviado: {agendamento['telefono']} "
+                        f"— {agendamento['data_hora']}"
+                    )
+        except Exception as e:
+            logger.error(f"Error en loop_lembretes: {e}")
+        await asyncio.sleep(INTERVALO_LEMBRETES)
 
 
 async def guardar_media_recibido(msg) -> str | None:
@@ -60,12 +95,14 @@ async def guardar_media_recibido(msg) -> str | None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Inicializa la base de datos al arrancar el servidor."""
+    """Inicializa la base de datos y el loop de lembretes al arrancar el servidor."""
     await inicializar_db()
     logger.info("Base de datos inicializada")
+    tarefa_lembretes = asyncio.create_task(loop_lembretes())
     logger.info(f"Servidor AgentKit corriendo en puerto {PORT}")
     logger.info(f"Proveedor de WhatsApp: {proveedor.__class__.__name__}")
     yield
+    tarefa_lembretes.cancel()
 
 
 app = FastAPI(
@@ -164,11 +201,20 @@ async def webhook_handler(request: Request):
             if escalar:
                 await notificar_consultor(proveedor, msg.telefono, historial, msg.texto)
                 await establecer_modo(msg.telefono, "manual")
+                await criar_alerta(
+                    "escalada", msg.telefono,
+                    f"🔔 {nome_contato or msg.telefono} pediu para falar com um consultor",
+                )
 
             # Si se marcó una chamada, avisamos al consultor con toda la
             # información que el cliente registró
             if agendamento:
                 await notificar_agendamento(proveedor, agendamento)
+                nome = agendamento.get("nome_cliente") or msg.telefono
+                await criar_alerta(
+                    "agendamento", msg.telefono,
+                    f"📅 Chamada agendada com {nome} para {formatar_slot(agendamento['data_hora'])}",
+                )
 
         return {"status": "ok"}
 

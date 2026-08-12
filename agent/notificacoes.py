@@ -42,6 +42,35 @@ async def notificar_consultor(
     return await proveedor.enviar_mensaje(NUMERO_CONSULTOR, "\n".join(lineas))
 
 
+async def notificar_lembrete_chamada(proveedor, agendamento: dict) -> bool:
+    """
+    Envía un recordatorio al WhatsApp personal del consultor unos minutos
+    antes de una chamada agendada. Retorna True si se envió con éxito.
+    """
+    if not NUMERO_CONSULTOR:
+        logger.warning("NUMERO_CONSULTOR no configurado — no se puede enviar lembrete")
+        return False
+
+    nome = agendamento.get("nome_cliente") or "(nome não indicado)"
+    telefone = agendamento["telefono"]
+    slot = formatar_slot(agendamento["data_hora"])
+    informacao = agendamento.get("informacao") or "(sem informação adicional)"
+
+    lineas = [
+        "⏰ *Lembrete: chamada daqui a poucos minutos*",
+        "",
+        f"*Cliente:* {nome}",
+        f"*Telefone:* {telefone}",
+        f"*Quando:* {slot}",
+        "",
+        f"*Informação registada:*\n{informacao}",
+        "",
+        f"Ver conversa: /admin/conversa/{telefone}",
+    ]
+
+    return await proveedor.enviar_mensaje(NUMERO_CONSULTOR, "\n".join(lineas))
+
+
 async def notificar_agendamento(proveedor, agendamento: dict) -> bool:
     """
     Envía un alerta al WhatsApp personal del consultor cuando se marca una

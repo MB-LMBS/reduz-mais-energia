@@ -8,11 +8,11 @@ por número de teléfono usando SQLite (local) o PostgreSQL (producción).
 
 import os
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import String, Text, DateTime, select, Integer, func, inspect, text
+from sqlalchemy import String, Text, DateTime, Boolean, select, Integer, func, inspect, text, or_
 from dotenv import load_dotenv
 
 logger = logging.getLogger("agentkit")
@@ -72,6 +72,20 @@ class Agendamento(Base):
     informacao: Mapped[str] = mapped_column(Text)  # o que o cliente quer discutir
     criado_em: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     estado: Mapped[str] = mapped_column(String(20), default="agendado")  # agendado, realizado, cancelado
+    # Se já foi enviado o lembrete ao consultor pouco antes da chamada
+    lembrete_enviado: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class Alerta(Base):
+    """Um alerta a mostrar no painel /admin (além do envio por WhatsApp)."""
+    __tablename__ = "alertas"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tipo: Mapped[str] = mapped_column(String(20))  # "agendamento", "lembrete", "escalada"
+    telefono: Mapped[str] = mapped_column(String(50))
+    mensagem: Mapped[str] = mapped_column(Text)
+    criado_em: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    visto: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 def _columnas_existentes(conn, tabla: str) -> set[str]:
@@ -370,6 +384,85 @@ async def listar_agendamentos(apenas_futuros: bool = True) -> list[dict]:
             }
             for a in result.scalars().all()
         ]
+
+
+async def obter_agendamentos_a_lembrar(agora: datetime, antecedencia_minutos: int = 5) -> list[dict]:
+    """
+    Retorna os agendamentos ativos cujo horário está dentro da janela de
+    lembrete (entre agora e agora + antecedencia_minutos) e que ainda não
+    foram lembrados.
+    """
+    limite = agora + timedelta(minutes=antecedencia_minutos)
+    async with async_session() as session:
+        query = select(Agendamento).where(
+            Agendamento.estado == "agendado",
+            Agendamento.data_hora > agora,
+            Agendamento.data_hora <= limite,
+            or_(Agendamento.lembrete_enviado == False, Agendamento.lembrete_enviado.is_(None)),
+        )
+        result = await session.execute(query)
+        return [
+            {
+                "id": a.id,
+                "telefono": a.telefono,
+                "nome_cliente": a.nome_cliente,
+                "data_hora": a.data_hora,
+                "informacao": a.informacao,
+            }
+            for a in result.scalars().all()
+        ]
+
+
+async def marcar_lembrete_enviado(agendamento_id: int):
+    """Marca um agendamento como já lembrado, para não enviar o lembrete duas vezes."""
+    async with async_session() as session:
+        agendamento = await session.get(Agendamento, agendamento_id)
+        if agendamento:
+            agendamento.lembrete_enviado = True
+            await session.commit()
+
+
+async def criar_alerta(tipo: str, telefono: str, mensagem: str):
+    """Regista um alerta para aparecer no painel /admin, além do WhatsApp."""
+    async with async_session() as session:
+        session.add(Alerta(tipo=tipo, telefono=telefono, mensagem=mensagem))
+        await session.commit()
+
+
+async def listar_alertas_nao_vistos() -> list[dict]:
+    """Lista os alertas ainda não vistos no painel, mais recentes primeiro."""
+    async with async_session() as session:
+        query = select(Alerta).where(Alerta.visto == False).order_by(Alerta.criado_em.desc())
+        result = await session.execute(query)
+        return [
+            {
+                "id": a.id,
+                "tipo": a.tipo,
+                "telefono": a.telefono,
+                "mensagem": a.mensagem,
+                "criado_em": a.criado_em,
+            }
+            for a in result.scalars().all()
+        ]
+
+
+async def marcar_alerta_visto(alerta_id: int):
+    """Marca um alerta como visto, para deixar de aparecer no painel."""
+    async with async_session() as session:
+        alerta = await session.get(Alerta, alerta_id)
+        if alerta:
+            alerta.visto = True
+            await session.commit()
+
+
+async def marcar_todos_alertas_vistos():
+    """Marca todos os alertas pendentes como vistos."""
+    async with async_session() as session:
+        query = select(Alerta).where(Alerta.visto == False)
+        result = await session.execute(query)
+        for alerta in result.scalars().all():
+            alerta.visto = True
+        await session.commit()
 
 
 async def limpiar_historial(telefono: str):

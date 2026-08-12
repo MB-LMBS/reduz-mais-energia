@@ -27,6 +27,7 @@ from agent.memory import (
     obtener_estado, establecer_estado, obtener_nome_contato, obtener_categoria,
     establecer_categoria, CATEGORIAS_VALIDAS, guardar_mensaje, listar_agendamentos,
     editar_mensagem, apagar_mensagem, obtener_mensagens_novas,
+    listar_alertas_nao_vistos, marcar_alerta_visto, marcar_todos_alertas_vistos,
 )
 from agent.agenda import formatar_slot
 from agent.providers import obtener_proveedor
@@ -106,6 +107,16 @@ ESTILO = """
   .toggle button.ganho.ativo { background: #0a7d4f; border-color: #0a7d4f; }
   .toggle button.perdido.ativo { background: #c0392b; border-color: #c0392b; }
   .topo { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .alertas { margin-bottom: 12px; }
+  .alerta { background: #fff8e1; border: 1px solid #f0d78c; border-radius: 8px; padding: 10px 12px;
+            margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;
+            gap: 10px; font-size: 0.9rem; }
+  .alerta a.ver { color: #1a1a1a; text-decoration: underline; flex: 1; }
+  .alerta button { flex-shrink: 0; padding: 4px 10px; border-radius: 6px; border: 1px solid #ccc;
+                    background: white; font-size: 0.8rem; }
+  .alertas-topo { display: flex; justify-content: flex-end; margin-bottom: 6px; }
+  .alertas-topo button { padding: 4px 10px; border-radius: 6px; border: 1px solid #ccc;
+                          background: white; font-size: 0.8rem; }
   .link-agenda { padding: 8px 14px; border-radius: 8px; background: white; color: #444;
                  font-size: 0.9rem; border: 1px solid #ddd; }
   .agendamento { background: white; border-radius: 10px; padding: 12px 16px; margin-bottom: 10px;
@@ -157,9 +168,39 @@ NOMES_CATEGORIA = {
 }
 
 
+def _render_alertas(alertas: list[dict]) -> str:
+    """Gera o HTML dos alertas pendentes (agendamentos, lembretes, escaladas)."""
+    if not alertas:
+        return ""
+    linhas = ""
+    for a in alertas:
+        mensagem = html.escape(a["mensagem"])
+        telefone = html.escape(a["telefono"])
+        linhas += f"""
+        <div class="alerta">
+          <a class="ver" href="/admin/conversa/{telefone}">{mensagem}</a>
+          <form method="post" action="/admin/alertas/{a['id']}/visto">
+            <button type="submit">Dispensar</button>
+          </form>
+        </div>
+        """
+    return f"""
+    <div class="alertas">
+      <div class="alertas-topo">
+        <form method="post" action="/admin/alertas/marcar-todos">
+          <button type="submit">Marcar todos como lidos</button>
+        </form>
+      </div>
+      {linhas}
+    </div>
+    """
+
+
 @router.get("/", response_class=HTMLResponse)
 async def painel(estado: str = "aberta", categoria: str = "todas", auth: bool = Depends(verificar_password)):
     """Lista as conversas do estado escolhido, com filtro opcional por categoria comercial."""
+    alertas = await listar_alertas_nao_vistos()
+    alertas_html = _render_alertas(alertas)
     todas = await listar_conversaciones()
     do_estado = [c for c in todas if c["estado"] == estado]
     conversas = do_estado if categoria == "todas" else [c for c in do_estado if c["categoria"] == categoria]
@@ -208,6 +249,7 @@ async def painel(estado: str = "aberta", categoria: str = "todas", auth: bool = 
         <h1>Conversas</h1>
         <a class="link-agenda" href="/admin/agenda">📅 Agenda</a>
       </div>
+      {alertas_html}
       <div class="tabs">
         <a href="/admin/?estado=aberta&categoria={categoria}" class="{'ativo' if estado == 'aberta' else ''}">Em aberto ({n_abertas})</a>
         <a href="/admin/?estado=tratada&categoria={categoria}" class="{'ativo' if estado == 'tratada' else ''}">Tratadas ({n_tratadas})</a>
@@ -218,6 +260,20 @@ async def painel(estado: str = "aberta", categoria: str = "todas", auth: bool = 
     </body>
     </html>
     """
+
+
+@router.post("/alertas/{alerta_id}/visto")
+async def dispensar_alerta(alerta_id: int, auth: bool = Depends(verificar_password)):
+    """Marca um alerta como visto, para deixar de aparecer no painel."""
+    await marcar_alerta_visto(alerta_id)
+    return RedirectResponse(url="/admin/", status_code=303)
+
+
+@router.post("/alertas/marcar-todos")
+async def dispensar_todos_alertas(auth: bool = Depends(verificar_password)):
+    """Marca todos os alertas pendentes como vistos."""
+    await marcar_todos_alertas_vistos()
+    return RedirectResponse(url="/admin/", status_code=303)
 
 
 @router.get("/agenda", response_class=HTMLResponse)
