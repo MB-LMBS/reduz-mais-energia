@@ -75,6 +75,25 @@ async def notificar_lembrete_chamada(proveedor, agendamento: dict) -> bool:
     return await proveedor.enviar_mensaje(NUMERO_CONSULTOR, "\n".join(lineas))
 
 
+async def notificar_cliente_lembrete(proveedor, agendamento: dict) -> bool:
+    """
+    Envía um lembrete diretamente ao próprio cliente, pouco antes da chamada
+    agendada. Retorna True se enviado com sucesso.
+    """
+    telefone = agendamento["telefono"]
+    nome = agendamento.get("nome_cliente")
+    hora = agendamento["data_hora"].strftime("%Hh%M")
+    saudacao = f"Olá, {nome}!" if nome else "Olá!"
+
+    mensagem = (
+        f"{saudacao} 📞 Só a lembrar que tem uma chamada agendada com a "
+        f"Reduz+ Energia hoje às **{hora}**. Vamos ligar-lhe daqui a poucos "
+        "minutos — até já! 😊"
+    )
+
+    return await proveedor.enviar_mensaje(telefone, mensagem)
+
+
 async def notificar_agendamento(proveedor, agendamento: dict) -> bool:
     """
     Envía un alerta al WhatsApp personal del consultor cuando se marca una

@@ -26,7 +26,9 @@ from agent.memory import (
     marcar_lembrete_enviado, criar_alerta, guardar_evento_outlook_id,
 )
 from agent.providers import obtener_proveedor
-from agent.notificacoes import notificar_consultor, notificar_agendamento, notificar_lembrete_chamada
+from agent.notificacoes import (
+    notificar_consultor, notificar_agendamento, notificar_lembrete_chamada, notificar_cliente_lembrete,
+)
 from agent.calendario import criar_evento_chamada as criar_evento_icloud
 from agent.outlook_calendar import criar_evento_chamada as criar_evento_outlook
 from agent.admin import router as admin_router
@@ -54,15 +56,23 @@ INTERVALO_LEMBRETES = 60
 async def loop_lembretes():
     """
     Verifica periodicamente se há chamadas agendadas a começar dentro de
-    5 minutos e ainda não lembradas, e envia um aviso ao consultor.
+    5 minutos e ainda não lembradas, e envia um aviso ao consultor e ao
+    próprio cliente.
     """
     while True:
         try:
             agora = datetime.now(ZoneInfo("Europe/Lisbon")).replace(tzinfo=None)
             pendentes = await obter_agendamentos_a_lembrar(agora)
             for agendamento in pendentes:
-                enviado = await notificar_lembrete_chamada(proveedor, agendamento)
-                if enviado:
+                enviado_consultor = await notificar_lembrete_chamada(proveedor, agendamento)
+                enviado_cliente = await notificar_cliente_lembrete(proveedor, agendamento)
+
+                if not enviado_cliente:
+                    logger.warning(
+                        f"Não foi possível enviar lembrete ao cliente {agendamento['telefono']}"
+                    )
+
+                if enviado_consultor:
                     await marcar_lembrete_enviado(agendamento["id"])
                     nome = agendamento.get("nome_cliente") or agendamento["telefono"]
                     await criar_alerta(
