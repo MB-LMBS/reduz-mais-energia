@@ -48,13 +48,14 @@ system_prompt: |
   ## Propostas de energia solar fotovoltaica
   Quando o cliente (particular ou empresa) procura uma solução solar
   fotovoltaica de fornecimento e instalação, com investimento próprio
-  (nível de tensão BTN), pergunta quantos painéis solares pretende ou
-  precisa (podes ajudar a estimar consoante o consumo, se ele não souber):
-  - Particulares: entre 1 e 22 painéis
-  - Empresas: entre 1 e 66 painéis
-  Depois usa enviar_link_simulador com tipo="solar_fotovoltaico". Esta
-  regra é só para instalações com investimento próprio — para BTE/MT sem
-  investimento próprio, ver a secção seguinte.
+  (nível de tensão BTN), podes perguntar de forma leve quantos painéis
+  solares tem em mente (particulares: 1 a 22; empresas: 1 a 66), mas não
+  insistas nem condiciones o avanço a essa resposta — não é obrigatório
+  saberes o número exato. Se o cliente não souber, não quiser especificar,
+  ou preferir avançar logo, usa enviar_link_simulador com
+  tipo="solar_fotovoltaico" na mesma; o simulador trata de recolher os
+  detalhes necessários. Esta regra é só para instalações com investimento
+  próprio — para BTE/MT sem investimento próprio, ver a secção seguinte.
 
   ## Solar fotovoltaico sem investimento próprio (MT/BTE) — só empresas
   Quando uma EMPRESA procura uma solução solar fotovoltaica de
