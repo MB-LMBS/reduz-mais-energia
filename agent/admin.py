@@ -461,9 +461,10 @@ async def painel(
 ):
     """Lista as conversas do estado escolhido, com filtro opcional por categoria comercial.
 
-    A vista "interesse" é um separador à parte dos habituais Em aberto/Tratadas —
-    mostra todas as conversas marcadas como "Com interesse" (ex: pedidos vindos do
-    simulador de eletricidade), independentemente de estarem abertas ou tratadas.
+    As vistas "interesse" e "aceitacao" são separadores à parte dos habituais Em
+    aberto/Tratadas — mostram todas as conversas marcadas como "Com interesse"
+    (ex: pedidos vindos do simulador) ou "Ganho" (aceitação da proposta pelo
+    cliente), independentemente de estarem abertas ou tratadas.
     """
     alertas = await listar_alertas_nao_vistos()
     alertas_html = _render_alertas(alertas)
@@ -471,9 +472,12 @@ async def painel(
     n_abertas = sum(1 for c in todas if c["estado"] == "aberta")
     n_tratadas = sum(1 for c in todas if c["estado"] == "tratada")
     n_interesse = sum(1 for c in todas if c["categoria"] == "interessado")
+    n_aceitacao = sum(1 for c in todas if c["categoria"] == "ganho")
 
     if vista == "interesse":
         conversas = [c for c in todas if c["categoria"] == "interessado"]
+    elif vista == "aceitacao":
+        conversas = [c for c in todas if c["categoria"] == "ganho"]
     else:
         do_estado = [c for c in todas if c["estado"] == estado]
         conversas = do_estado if categoria == "todas" else [c for c in do_estado if c["categoria"] == categoria]
@@ -531,11 +535,12 @@ async def painel(
       {_relogio_feriados_html()}
       {alertas_html}
       <div class="tabs">
-        <a href="/admin/?estado=aberta&categoria={categoria}" class="{'ativo' if not vista and estado == 'aberta' else ''}">Em aberto ({n_abertas})</a>
-        <a href="/admin/?estado=tratada&categoria={categoria}" class="{'ativo' if not vista and estado == 'tratada' else ''}">Tratadas ({n_tratadas})</a>
+        <a href="/admin/?estado=aberta&categoria={categoria}" class="{'ativo' if not vista and estado == 'aberta' else ''}">Mensagens em Aberto ({n_abertas})</a>
+        <a href="/admin/?estado=tratada&categoria={categoria}" class="{'ativo' if not vista and estado == 'tratada' else ''}">Mensagens Tratadas ({n_tratadas})</a>
         <a href="/admin/?vista=interesse" class="{'ativo' if vista == 'interesse' else ''}">Interesse numa proposta ({n_interesse})</a>
+        <a href="/admin/?vista=aceitacao" class="{'ativo' if vista == 'aceitacao' else ''}">Aceitação da Proposta ({n_aceitacao})</a>
       </div>
-      {'' if vista == 'interesse' else f'<div class="filtros">{filtros_categoria}</div>'}
+      {'' if vista else f'<div class="filtros">{filtros_categoria}</div>'}
       {linhas}
       <script>setInterval(function() {{ location.reload(); }}, 20000);</script>
     </body>
