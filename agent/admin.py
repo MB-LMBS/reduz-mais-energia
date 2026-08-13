@@ -44,7 +44,6 @@ from agent.feriados import (
     feriado_de_hoje, proximos_feriados, nome_dia_semana,
     feriados_municipais_de_hoje, proximo_feriado_municipal,
 )
-from agent.formatacao_whatsapp import negrito_campos, extrair_links, rotulo_botao
 
 logger = logging.getLogger("agentkit")
 router = APIRouter(prefix="/admin")
@@ -1075,11 +1074,8 @@ async def reencaminhar_mensagem(
                 media_path=msg["media_path"], nome_ficheiro=nome_ficheiro,
             )
     else:
-        texto_reencaminhado = f"↪️ *Mensagem reencaminhada:*\n\n{negrito_campos(msg.get('content') or '')}"
-        texto_sem_links, links = extrair_links(texto_reencaminhado)
-        enviado = await proveedor.enviar_mensaje(destino_limpo, texto_sem_links)
-        for url in links:
-            await proveedor.enviar_botao_link(destino_limpo, "🔗 Link da mensagem reencaminhada:", rotulo_botao(url), url)
+        texto_reencaminhado = f"↪️ *Mensagem reencaminhada:*\n\n{msg.get('content') or ''}"
+        enviado = await proveedor.enviar_mensaje(destino_limpo, texto_reencaminhado)
         if enviado:
             await guardar_mensaje(destino_limpo, "humano", texto_reencaminhado)
 
