@@ -465,6 +465,34 @@ async def listar_agendamentos(apenas_futuros: bool = True) -> list[dict]:
         ]
 
 
+async def obter_agendamento_ativo_por_telefone(telefone: str) -> dict | None:
+    """Retorna o próximo agendamento ativo (futuro, não cancelado) deste telefone, ou None."""
+    async with async_session() as session:
+        agora_lisboa = datetime.now(ZoneInfo("Europe/Lisbon")).replace(tzinfo=None)
+        query = (
+            select(Agendamento)
+            .where(
+                Agendamento.telefono == telefone,
+                Agendamento.estado == "agendado",
+                Agendamento.data_hora >= agora_lisboa,
+            )
+            .order_by(Agendamento.data_hora.asc())
+        )
+        result = await session.execute(query)
+        a = result.scalars().first()
+        if not a:
+            return None
+        return {
+            "id": a.id,
+            "telefono": a.telefono,
+            "nome_cliente": a.nome_cliente,
+            "data_hora": a.data_hora,
+            "informacao": a.informacao,
+            "evento_outlook_id": a.evento_outlook_id,
+            "evento_calcom_uid": a.evento_calcom_uid,
+        }
+
+
 async def obter_agendamentos_a_lembrar(agora: datetime, antecedencia_minutos: int = 5) -> list[dict]:
     """
     Retorna os agendamentos ativos cujo horário está dentro da janela de

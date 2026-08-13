@@ -15,8 +15,15 @@ from anthropic import AsyncAnthropic
 from dotenv import load_dotenv
 
 from agent.agenda import formatar_slot
-from agent.cal_com import obter_horarios_disponiveis, criar_reserva, calcom_configurado
-from agent.memory import criar_agendamento, guardar_evento_calcom_uid
+from agent.cal_com import obter_horarios_disponiveis, criar_reserva, cancelar_reserva, calcom_configurado
+from agent.memory import (
+    criar_agendamento, guardar_evento_calcom_uid,
+    obter_agendamento_ativo_por_telefone, cancelar_agendamento, criar_alerta,
+)
+from agent.calendario import apagar_evento_chamada as apagar_evento_icloud
+from agent.outlook_calendar import apagar_evento_chamada as apagar_evento_outlook
+from agent.notificacoes import notificar_cancelamento
+from agent.providers import obtener_proveedor
 
 load_dotenv()
 logger = logging.getLogger("agentkit")
@@ -119,6 +126,27 @@ HERRAMIENTAS = [
                 },
             },
             "required": ["data", "hora", "nome", "informacao"],
+        },
+    },
+    {
+        "name": "cancelar_chamada",
+        "description": (
+            "Usa esta ferramenta quando o cliente pedir para cancelar ou "
+            "desmarcar uma chamada já agendada. Não precisas de perguntar "
+            "mais nada antes — a ferramenta procura automaticamente a "
+            "chamada ativa deste número. Se ele quiser remarcar para outro "
+            "horário, cancela primeiro com esta ferramenta e depois segue o "
+            "processo normal de agendamento para o novo horário."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "motivo": {
+                    "type": "string",
+                    "description": "Motivo do cancelamento, se o cliente o tiver indicado (opcional).",
+                },
+            },
+            "required": [],
         },
     },
     {
@@ -452,6 +480,49 @@ async def _processar_agendamento(entrada: dict, telefono: str) -> tuple[str, dic
     )
 
 
+async def _processar_cancelamento(telefone: str, motivo: str) -> str:
+    """
+    Cancela a chamada ativa deste cliente, vinda da ferramenta cancelar_chamada:
+    cancela no Cal.com, no registo local, e avisa o consultor por WhatsApp.
+
+    Returns:
+        Mensagem para o modelo confirmar ao cliente.
+    """
+    agendamento = await obter_agendamento_ativo_por_telefone(telefone)
+    if agendamento is None:
+        return (
+            "Não há nenhuma chamada agendada para este número atualmente. "
+            "Informa o cliente com simpatia."
+        )
+
+    cancelado = await cancelar_agendamento(agendamento["id"])
+    if cancelado is None:
+        return (
+            "Não foi possível cancelar — a chamada pode já ter sido cancelada "
+            "entretanto. Informa o cliente."
+        )
+
+    if cancelado.get("evento_calcom_uid"):
+        await cancelar_reserva(cancelado["evento_calcom_uid"], motivo or "Cancelado pelo cliente via WhatsApp")
+    await apagar_evento_icloud(agendamento["id"])
+    await apagar_evento_outlook(cancelado.get("evento_outlook_id"))
+
+    proveedor = obtener_proveedor()
+    await notificar_cancelamento(proveedor, cancelado, motivo)
+    await criar_alerta(
+        "cancelamento", telefone,
+        f"❌ {cancelado.get('nome_cliente') or telefone} cancelou a chamada de "
+        f"{formatar_slot(cancelado['data_hora'])}",
+    )
+
+    logger.info(f"Chamada cancelada pelo cliente: {telefone} — {formatar_slot(cancelado['data_hora'])}")
+    return (
+        f"Chamada de {formatar_slot(cancelado['data_hora'])} cancelada com sucesso. "
+        "Confirma isto ao cliente de forma simpática, e pergunta se quer marcar "
+        "outro horário."
+    )
+
+
 async def generar_respuesta(
     mensaje: str, historial: list[dict], telefono: str, nome_contato: str | None = None
 ) -> tuple[str, bool, dict | None, list[str] | None, dict | None, str | None, list[dict] | None]:
@@ -537,6 +608,9 @@ async def generar_respuesta(
                     resultado_texto, dados = await _processar_agendamento(tool_use.input, telefono)
                     if dados:
                         agendamento = dados
+                elif tool_use.name == "cancelar_chamada":
+                    motivo_cancelamento = (tool_use.input.get("motivo") or "").strip()
+                    resultado_texto = await _processar_cancelamento(telefono, motivo_cancelamento)
                 elif tool_use.name == "oferecer_opcoes":
                     pergunta = (tool_use.input.get("pergunta") or "").strip()
                     opcoes_validas = [

@@ -102,6 +102,35 @@ async def notificar_cliente_lembrete(proveedor, agendamento: dict) -> bool:
     return await proveedor.enviar_mensaje(telefone, mensagem)
 
 
+async def notificar_cancelamento(proveedor, agendamento: dict, motivo: str | None = None) -> bool:
+    """
+    Envía un alerta al WhatsApp personal del consultor cuando o próprio
+    cliente cancela uma chamada agendada, via WhatsApp.
+    Retorna True si se envió con éxito.
+    """
+    if not NUMERO_CONSULTOR:
+        logger.warning("NUMERO_CONSULTOR no configurado — no se puede notificar cancelamento")
+        return False
+
+    nome = agendamento.get("nome_cliente") or "(nome não indicado)"
+    telefone = agendamento["telefono"]
+    slot = formatar_slot(agendamento["data_hora"])
+
+    lineas = [
+        "❌ *Chamada cancelada pelo cliente*",
+        "",
+        f"*Cliente:* {nome}",
+        f"*Telefone:* {telefone}",
+        f"*Era às:* {slot}",
+    ]
+    if motivo:
+        lineas.append(f"*Motivo:* {negrito_campos(motivo)}")
+    lineas.append("")
+    lineas.append(f"Ver conversa: {APP_BASE_URL}/admin/conversa/{telefone}")
+
+    return await proveedor.enviar_mensaje(NUMERO_CONSULTOR, "\n".join(lineas))
+
+
 async def notificar_agendamento(proveedor, agendamento: dict) -> bool:
     """
     Envía un alerta al WhatsApp personal del consultor cuando se marca una
