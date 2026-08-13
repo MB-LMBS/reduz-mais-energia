@@ -174,13 +174,17 @@ ESTILO = """
   .msg .remetente { display: block; font-size: 0.7rem; font-weight: 700; opacity: 0.5; margin-bottom: 3px;
                      text-transform: uppercase; letter-spacing: 0.03em; }
   .msg .hora { display: block; font-size: 0.7rem; color: #999; margin-top: 4px; text-align: right; }
-  .msg-acoes { display: flex; gap: 12px; justify-content: flex-end; margin-top: 5px; }
-  .msg-acoes summary, .msg-acoes .btn-apagar { font-size: 0.75rem; color: var(--texto-secundario); cursor: pointer;
-                                                 background: none; border: none; padding: 0;
-                                                 transition: color 0.12s ease; }
+  .msg-acoes { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; justify-content: flex-end;
+               margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(128,128,128,0.18); }
+  .msg-acoes details, .msg-acoes > form { flex-shrink: 0; }
+  .msg-acoes summary, .msg-acoes .btn-apagar { font-size: 0.85rem; color: var(--texto-secundario); cursor: pointer;
+                                                 background: none; border: none; padding: 0; line-height: 1;
+                                                 list-style: none; transition: color 0.12s ease; }
+  .msg-acoes summary::-webkit-details-marker { display: none; }
   .msg-acoes summary:hover { color: var(--verde); }
   .msg-acoes .btn-apagar { color: var(--vermelho); opacity: 0.85; }
   .msg-acoes .btn-apagar:hover { opacity: 1; }
+  .msg-acoes details[open] { flex-basis: 100%; }
   .form-editar { display: flex; gap: 6px; margin-top: 6px; }
   .form-editar textarea { flex: 1; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--borda);
                             resize: none; background: var(--fundo-card); color: var(--texto); }
@@ -742,7 +746,7 @@ def _render_mensagem(msg: dict, telefono: str) -> str:
             conteudo_editavel = html.escape(msg["content"] or "")
             editar_html = f"""
           <details>
-            <summary>✏️ Editar</summary>
+            <summary title="Editar">✏️</summary>
             <form class="form-editar" method="post" action="/admin/conversa/{telefono}/mensagem/{msg['id']}/editar">
               <textarea name="texto" rows="2">{conteudo_editavel}</textarea>
               <button type="submit">Guardar</button>
@@ -753,7 +757,7 @@ def _render_mensagem(msg: dict, telefono: str) -> str:
         <div class="msg-acoes">
           {editar_html}
           <details>
-            <summary>↪️ Reencaminhar</summary>
+            <summary title="Reencaminhar">↪️</summary>
             <form class="form-reencaminhar" method="post" action="/admin/conversa/{telefono}/mensagem/{msg['id']}/reencaminhar">
               <input type="text" name="destino" placeholder="Número (ex: 351912345678)" required>
               <button type="submit">Enviar</button>
@@ -761,7 +765,7 @@ def _render_mensagem(msg: dict, telefono: str) -> str:
           </details>
           <form method="post" action="/admin/conversa/{telefono}/mensagem/{msg['id']}/apagar"
                 onsubmit="return confirm('Apagar esta mensagem do registo? Isto não a remove do WhatsApp de quem já a recebeu.')">
-            <button type="submit" class="btn-apagar">🗑️ Apagar</button>
+            <button type="submit" class="btn-apagar" title="Apagar">🗑️</button>
           </form>
         </div>
         """

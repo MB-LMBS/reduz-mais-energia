@@ -33,6 +33,7 @@ from agent.notificacoes import (
 from agent.calendario import criar_evento_chamada as criar_evento_icloud
 from agent.outlook_calendar import criar_evento_chamada as criar_evento_outlook
 from agent.admin import router as admin_router, LOGO_URL
+from agent.formatacao_whatsapp import negrito_campos, extrair_links, rotulo_botao
 
 load_dotenv()
 
@@ -65,7 +66,7 @@ def montar_confirmacao_pedido_simulador(texto_original: str) -> str:
     """Cópia integral do pedido recebido, seguida da confirmação fixa ao cliente."""
     return (
         f"✅ *O seu pedido foi recebido com sucesso:*\n\n"
-        f"{texto_original}\n\n"
+        f"{negrito_campos(texto_original)}\n\n"
         "Muito obrigado pelo seu tempo e pela confiança na Reduz+ Energia! 🙏 "
         "Em breve irá entrar em contacto um consultor energético para validar o pedido."
     )
@@ -202,8 +203,11 @@ async def webhook_handler(request: Request):
             # consultor, tal como um pedido novo
             if msg.tipo == "texto" and msg.texto.strip().startswith(MARCADOR_PEDIDO_SIMULADOR):
                 confirmacao = montar_confirmacao_pedido_simulador(msg.texto)
+                texto_sem_links, links = extrair_links(confirmacao)
                 await guardar_mensaje(msg.telefono, "user", msg.texto, tipo=msg.tipo)
-                await proveedor.enviar_mensaje(msg.telefono, confirmacao)
+                await proveedor.enviar_mensaje(msg.telefono, texto_sem_links)
+                for url in links:
+                    await proveedor.enviar_botao_link(msg.telefono, "🔗 Link relacionado com o pedido:", rotulo_botao(url), url)
                 await guardar_mensaje(msg.telefono, "assistant", confirmacao)
                 await establecer_categoria(msg.telefono, "interessado")
                 await criar_alerta(

@@ -11,6 +11,7 @@ import os
 import logging
 
 from agent.agenda import formatar_slot
+from agent.formatacao_whatsapp import negrito_campos
 
 logger = logging.getLogger("agentkit")
 
@@ -41,13 +42,16 @@ async def notificar_consultor(
     for msg in historial:
         etiqueta = "Cliente" if msg["role"] == "user" else "Reduz+"
         contenido = msg["content"] or f"[ficheiro: {msg.get('nome_ficheiro') or msg.get('tipo')}]"
-        lineas.append(f"*{etiqueta}:* {contenido}")
+        lineas.append(f"*{etiqueta}:* {negrito_campos(contenido)}")
     if mensaje_actual:
-        lineas.append(f"*Cliente:* {mensaje_actual}")
-    lineas.append("")
-    lineas.append(f"Responde diretamente ao cliente em: {APP_BASE_URL}/admin/conversa/{telefono_cliente}")
+        lineas.append(f"*Cliente:* {negrito_campos(mensaje_actual)}")
 
-    return await proveedor.enviar_mensaje(NUMERO_CONSULTOR, "\n".join(lineas))
+    enviado = await proveedor.enviar_mensaje(NUMERO_CONSULTOR, "\n".join(lineas))
+    await proveedor.enviar_botao_link(
+        NUMERO_CONSULTOR, "Responder diretamente ao cliente:", "Abrir conversa",
+        f"{APP_BASE_URL}/admin/conversa/{telefono_cliente}",
+    )
+    return enviado
 
 
 async def notificar_lembrete_chamada(proveedor, agendamento: dict) -> bool:
