@@ -80,6 +80,8 @@ class Agendamento(Base):
     lembrete_enviado: Mapped[bool] = mapped_column(Boolean, default=False)
     # Id do evento no Outlook/Microsoft 365 (Graph API), para poder apagá-lo se a chamada for cancelada
     evento_outlook_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # Uid da reserva no Cal.com, para poder cancelá-la se a chamada for cancelada
+    evento_calcom_uid: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
 
 class ConfigApp(Base):
@@ -402,6 +404,7 @@ async def cancelar_agendamento(agendamento_id: int) -> dict | None:
             "data_hora": agendamento.data_hora,
             "informacao": agendamento.informacao,
             "evento_outlook_id": agendamento.evento_outlook_id,
+            "evento_calcom_uid": agendamento.evento_calcom_uid,
         }
 
 
@@ -411,6 +414,15 @@ async def guardar_evento_outlook_id(agendamento_id: int, evento_outlook_id: str)
         agendamento = await session.get(Agendamento, agendamento_id)
         if agendamento:
             agendamento.evento_outlook_id = evento_outlook_id
+            await session.commit()
+
+
+async def guardar_evento_calcom_uid(agendamento_id: int, evento_calcom_uid: str):
+    """Guarda o uid da reserva criada no Cal.com, para a poder cancelar mais tarde."""
+    async with async_session() as session:
+        agendamento = await session.get(Agendamento, agendamento_id)
+        if agendamento:
+            agendamento.evento_calcom_uid = evento_calcom_uid
             await session.commit()
 
 

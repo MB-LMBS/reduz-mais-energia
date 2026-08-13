@@ -35,6 +35,7 @@ from agent.agenda import formatar_slot
 from agent.providers import obtener_proveedor
 from agent.notificacoes import notificar_consultor, NUMERO_CONSULTOR
 from agent.calendario import apagar_evento_chamada as apagar_evento_icloud
+from agent.cal_com import cancelar_reserva as cancelar_reserva_calcom
 from agent.outlook_calendar import (
     apagar_evento_chamada as apagar_evento_outlook,
     outlook_configurado, esta_ligado as outlook_esta_ligado,
@@ -694,11 +695,13 @@ async def outlook_callback(code: str | None = None, error: str | None = None, au
 
 @router.post("/agenda/{agendamento_id}/cancelar")
 async def cancelar_chamada(agendamento_id: int, auth: bool = Depends(verificar_password)):
-    """Cancela uma chamada agendada e remove o evento correspondente do calendário (iCloud e/ou Outlook)."""
+    """Cancela uma chamada agendada e remove a reserva correspondente no Cal.com (e iCloud/Outlook, se ligados)."""
     cancelado = await cancelar_agendamento(agendamento_id)
     if cancelado:
         await apagar_evento_icloud(agendamento_id)
         await apagar_evento_outlook(cancelado.get("evento_outlook_id"))
+        if cancelado.get("evento_calcom_uid"):
+            await cancelar_reserva_calcom(cancelado["evento_calcom_uid"], "Cancelado pelo consultor")
         logger.info(f"Chamada cancelada: agendamento {agendamento_id}")
     return RedirectResponse(url="/admin/agenda", status_code=303)
 

@@ -14,8 +14,9 @@ from zoneinfo import ZoneInfo
 from anthropic import AsyncAnthropic
 from dotenv import load_dotenv
 
-from agent.agenda import proximos_horarios_disponiveis, formatar_slot, slot_e_valido, horario_minimo_permitido
-from agent.memory import criar_agendamento
+from agent.agenda import formatar_slot
+from agent.cal_com import obter_horarios_disponiveis, criar_reserva, calcom_configurado
+from agent.memory import criar_agendamento, guardar_evento_calcom_uid
 
 load_dotenv()
 logger = logging.getLogger("agentkit")
@@ -271,9 +272,18 @@ def obtener_contexto_temporal() -> str:
 async def obtener_contexto_agenda() -> str:
     """
     Genera un bloque con los próximos horarios libres para chamadas telefónicas,
-    para que el modelo pueda ofrecerlos directamente sin inventar horas.
+    consultados em tempo real ao Cal.com, para que o modelo os ofereça
+    diretamente sem inventar horas.
     """
-    slots = await proximos_horarios_disponiveis(quantidade=3)
+    if not calcom_configurado():
+        return (
+            "\n\n## Agendamento de chamadas\n"
+            "O agendamento de chamadas está temporariamente indisponível — "
+            "informa o cliente e sugere que a equipa entre em contacto por outra via."
+        )
+
+    todos_slots = await obter_horarios_disponiveis(dias_a_frente=7)
+    slots = todos_slots[:3]
     if not slots:
         return (
             "\n\n## Agendamento de chamadas\n"
@@ -289,9 +299,7 @@ async def obtener_contexto_agenda() -> str:
         "cliente procura. Só ofereças a chamada depois de o cliente mostrar "
         "interesse real no serviço (ex: já perguntou sobre uma solução "
         "específica, quer avançar, ou pede para falar com alguém).\n"
-        "As chamadas são sempre à tarde (15h-19h), de Segunda a Sábado, em "
-        "blocos de 15 minutos, com pelo menos 1 hora de antecedência. Os "
-        "próximos horários livres são:\n"
+        "Os próximos horários realmente livres na agenda são:\n"
         f"{linhas}\n"
         "Quando ofereceres, sugere apenas 2 ou 3 horários — não despejes uma "
         "lista longa. Usa SEMPRE a ferramenta oferecer_opcoes para "
@@ -299,9 +307,9 @@ async def obtener_contexto_agenda() -> str:
         "os horários em texto normal, para o cliente não ter de os escrever "
         "à mão. Depois de o cliente escolher um botão, confirma o nome dele "
         "e o motivo da chamada, e só depois usa a ferramenta "
-        "agendar_chamada para a marcar. Se o cliente preferir outro dia/hora "
-        "dentro da grelha, podes marcar diretamente — a ferramenta valida se "
-        "está mesmo livre e com antecedência suficiente."
+        "agendar_chamada para a marcar. Só sugere horários desta lista — "
+        "se o cliente pedir outro dia/hora fora dela, explica que não está "
+        "disponível e apresenta de novo as opções livres."
     )
 
 
@@ -387,29 +395,28 @@ async def _processar_agendamento(entrada: dict, telefono: str) -> tuple[str, dic
             None,
         )
 
-    if not slot_e_valido(data_hora):
+    if not calcom_configurado():
         return (
-            "Não foi possível marcar: esse horário está fora da grelha permitida "
-            "(tardes de Segunda a Sábado, 15h-19h, blocos de 15 min). Sugere ao "
-            "cliente um dos horários disponíveis listados no contexto.",
+            "Não foi possível marcar: o agendamento está temporariamente "
+            "indisponível. Sugere que a equipa entre em contacto por outra via.",
             None,
         )
 
-    if data_hora < horario_minimo_permitido():
+    data_hora_tz = data_hora.replace(tzinfo=ZoneInfo("Europe/Lisbon"))
+    reserva = await criar_reserva(data_hora_tz, nome, telefone=telefono, informacao=informacao)
+    if reserva is None:
         return (
-            "Não foi possível marcar: esse horário é demasiado próximo — "
-            "precisamos de pelo menos 1 hora de antecedência para o consultor "
-            "se preparar. Sugere ao cliente um horário mais à frente.",
+            "Não foi possível marcar: esse horário pode já não estar livre, ou "
+            "está fora da disponibilidade real da agenda. Sugere ao cliente um "
+            "dos horários indicados no contexto.",
             None,
         )
 
     agendamento_id = await criar_agendamento(telefono, nome or None, data_hora, informacao)
-    if agendamento_id is None:
-        return (
-            "Não foi possível marcar: esse horário acabou de ser ocupado por outra "
-            "pessoa. Sugere ao cliente escolher outro horário disponível.",
-            None,
-        )
+    if agendamento_id is not None:
+        uid = reserva.get("uid")
+        if uid:
+            await guardar_evento_calcom_uid(agendamento_id, uid)
 
     dados = {
         "id": agendamento_id,
@@ -417,8 +424,9 @@ async def _processar_agendamento(entrada: dict, telefono: str) -> tuple[str, dic
         "nome_cliente": nome,
         "data_hora": data_hora,
         "informacao": informacao,
+        "evento_calcom_uid": reserva.get("uid"),
     }
-    logger.info(f"Chamada agendada: {telefono} — {formatar_slot(data_hora)}")
+    logger.info(f"Chamada agendada (Cal.com uid={reserva.get('uid')}): {telefono} — {formatar_slot(data_hora)}")
     return (
         f"Chamada marcada com sucesso para {formatar_slot(data_hora)}. "
         "Confirma isto ao cliente de forma clara e simpática.",
