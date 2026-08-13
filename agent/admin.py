@@ -155,8 +155,8 @@ ESTILO = """
   .preview { color: var(--texto-secundario); font-size: 0.9rem; margin-top: 4px; white-space: nowrap;
              overflow: hidden; text-overflow: ellipsis; }
   .msg { padding: 9px 13px; border-radius: 16px; margin-bottom: 10px; max-width: 80%; word-break: break-word;
-         box-shadow: var(--sombra); position: relative; line-height: 1.4; color: var(--texto);
-         white-space: pre-wrap; }
+         box-shadow: var(--sombra); position: relative; line-height: 1.4; color: var(--texto); }
+  .msg .conteudo { display: block; white-space: pre-wrap; }
   .msg strong { font-weight: 700; }
   .msg em { font-style: italic; }
   .msg .campo { font-weight: 600; }
@@ -733,7 +733,7 @@ def _render_mensagem(msg: dict, telefono: str) -> str:
             partes += f'<a class="ficheiro" href="{url}" target="_blank">📎 {nome_mostrar}</a>'
 
     if msg["content"]:
-        partes += _linkificar(msg["content"])
+        partes += f'<span class="conteudo">{_linkificar(msg["content"])}</span>'
 
     partes += f'<small class="hora">{_formatar_hora(msg.get("timestamp"))}</small>'
 
