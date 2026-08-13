@@ -27,9 +27,9 @@ from agent.memory import (
     listar_conversaciones, obtener_historial, obtener_modo, establecer_modo,
     obtener_estado, establecer_estado, obtener_nome_contato, obtener_categoria,
     establecer_categoria, CATEGORIAS_VALIDAS, guardar_mensaje, listar_agendamentos,
-    editar_mensagem, apagar_mensagem, obtener_mensagens_novas,
+    editar_mensagem, apagar_mensagem, obter_mensagem, obtener_mensagens_novas,
     listar_alertas_nao_vistos, marcar_alerta_visto, marcar_todos_alertas_vistos,
-    cancelar_agendamento,
+    cancelar_agendamento, limpiar_historial,
 )
 from agent.agenda import formatar_slot
 from agent.providers import obtener_proveedor
@@ -133,6 +133,12 @@ ESTILO = """
                     transition: transform 0.12s ease, box-shadow 0.12s ease; }
   .btn-consultor:hover { box-shadow: 0 5px 16px rgba(29,111,165,0.45); }
   .btn-consultor:active { transform: scale(0.98); }
+  .btn-limpar { width: 100%; padding: 12px; margin-bottom: 8px; border-radius: 12px; border: none;
+                 background: linear-gradient(135deg, var(--vermelho), #922016); color: white; font-size: 0.9rem;
+                 font-weight: 600; box-shadow: 0 3px 10px rgba(192,57,43,0.35);
+                 transition: transform 0.12s ease, box-shadow 0.12s ease; }
+  .btn-limpar:hover { box-shadow: 0 5px 16px rgba(192,57,43,0.45); }
+  .btn-limpar:active { transform: scale(0.98); }
   .badges { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
   .badge { font-size: 0.75rem; padding: 3px 9px; border-radius: 10px; white-space: nowrap; font-weight: 600; }
   .badge.bot { background: #e3f2e9; color: var(--verde); }
@@ -181,6 +187,12 @@ ESTILO = """
   .form-editar button { padding: 0 12px; border-radius: 8px; border: none; background: var(--verde);
                           color: white; font-weight: 600; transition: background 0.12s ease; }
   .form-editar button:hover { background: var(--verde-escuro); }
+  .form-reencaminhar { display: flex; gap: 6px; margin-top: 6px; }
+  .form-reencaminhar input { flex: 1; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--borda);
+                               background: var(--fundo-card); color: var(--texto); min-width: 0; }
+  .form-reencaminhar button { padding: 0 12px; border-radius: 8px; border: none; background: var(--azul);
+                                color: white; font-weight: 600; transition: background 0.12s ease; }
+  .form-reencaminhar button:hover { opacity: 0.9; }
   form.reply { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
   form.reply textarea { flex: 1; min-width: 140px; padding: 12px 14px; border-radius: 20px; border: 1px solid var(--borda);
                          resize: none; background: var(--fundo-card); color: var(--texto); box-shadow: var(--sombra);
@@ -721,12 +733,14 @@ def _render_mensagem(msg: dict, telefono: str) -> str:
 
     partes += f'<small class="hora">{_formatar_hora(msg.get("timestamp"))}</small>'
 
-    # Mensagens enviadas manualmente pelo painel podem ser corrigidas ou
-    # apagadas do registo (não afeta o que o cliente já recebeu no WhatsApp)
-    if msg["role"] == "humano" and msg.get("id"):
-        conteudo_editavel = html.escape(msg["content"] or "")
-        partes += f"""
-        <div class="msg-acoes">
+    # Qualquer mensagem (cliente, bot ou manual) pode ser reencaminhada ou
+    # apagada do registo do painel — não afeta o que já foi entregue no
+    # WhatsApp. Só as enviadas manualmente (role "humano") podem ser editadas.
+    if msg.get("id"):
+        editar_html = ""
+        if msg["role"] == "humano":
+            conteudo_editavel = html.escape(msg["content"] or "")
+            editar_html = f"""
           <details>
             <summary>✏️ Editar</summary>
             <form class="form-editar" method="post" action="/admin/conversa/{telefono}/mensagem/{msg['id']}/editar">
@@ -734,8 +748,19 @@ def _render_mensagem(msg: dict, telefono: str) -> str:
               <button type="submit">Guardar</button>
             </form>
           </details>
+            """
+        partes += f"""
+        <div class="msg-acoes">
+          {editar_html}
+          <details>
+            <summary>↪️ Reencaminhar</summary>
+            <form class="form-reencaminhar" method="post" action="/admin/conversa/{telefono}/mensagem/{msg['id']}/reencaminhar">
+              <input type="text" name="destino" placeholder="Número (ex: 351912345678)" required>
+              <button type="submit">Enviar</button>
+            </form>
+          </details>
           <form method="post" action="/admin/conversa/{telefono}/mensagem/{msg['id']}/apagar"
-                onsubmit="return confirm('Apagar esta mensagem do registo? Isto não a remove do WhatsApp do cliente, que já a recebeu.')">
+                onsubmit="return confirm('Apagar esta mensagem do registo? Isto não a remove do WhatsApp de quem já a recebeu.')">
             <button type="submit" class="btn-apagar">🗑️ Apagar</button>
           </form>
         </div>
@@ -777,6 +802,10 @@ async def ver_conversa(telefono: str, auth: bool = Depends(verificar_password)):
                      onsubmit="return confirm('Encaminhar esta conversa para o consultor Luis Sequeira ({NUMERO_CONSULTOR})?')">
                 <button type="submit" class="btn-consultor">📞 Encaminhar para consultor</button>
               </form>''' if NUMERO_CONSULTOR else ''}
+              <form method="post" action="/admin/conversa/{telefono}/limpar"
+                     onsubmit="return confirm('Limpar toda esta conversa do painel? Isto apaga o registo todo — não pode ser desfeito, e não afeta o que já foi entregue no WhatsApp.')">
+                <button type="submit" class="btn-limpar">🧹 Limpar conversa</button>
+              </form>
 
               <div class="toggle">
                 <form method="post" action="/admin/conversa/{telefono}/modo">
@@ -955,9 +984,55 @@ async def editar_mensagem_manual(
 
 @router.post("/conversa/{telefono}/mensagem/{mensagem_id}/apagar")
 async def apagar_mensagem_manual(telefono: str, mensagem_id: int, auth: bool = Depends(verificar_password)):
-    """Remove do registo do painel uma mensagem enviada manualmente."""
+    """Remove do registo do painel uma mensagem (cliente, bot ou manual)."""
     await apagar_mensagem(mensagem_id)
     return RedirectResponse(url=f"/admin/conversa/{telefono}", status_code=303)
+
+
+@router.post("/conversa/{telefono}/mensagem/{mensagem_id}/reencaminhar")
+async def reencaminhar_mensagem(
+    telefono: str, mensagem_id: int, destino: str = Form(...), auth: bool = Depends(verificar_password),
+):
+    """Reenvia o conteúdo de uma mensagem (texto ou ficheiro) para outro número de WhatsApp."""
+    destino_limpo = re.sub(r"\D", "", destino)
+    msg = await obter_mensagem(mensagem_id)
+    if not msg or not destino_limpo:
+        return RedirectResponse(url=f"/admin/conversa/{telefono}", status_code=303)
+
+    proveedor = obtener_proveedor()
+    if msg.get("media_path") and os.path.isfile(msg["media_path"]):
+        with open(msg["media_path"], "rb") as f:
+            conteudo = f.read()
+        nome_ficheiro = msg.get("nome_ficheiro") or os.path.basename(msg["media_path"])
+        mime_type = mimetypes.guess_type(nome_ficheiro)[0] or "application/octet-stream"
+        enviado = await proveedor.enviar_documento(
+            destino_limpo, conteudo, nome_ficheiro, mime_type, legenda=msg.get("content") or ""
+        )
+        if enviado:
+            await guardar_mensaje(
+                destino_limpo, "humano", msg.get("content") or "", tipo=msg.get("tipo", "documento"),
+                media_path=msg["media_path"], nome_ficheiro=nome_ficheiro,
+            )
+    else:
+        texto_reencaminhado = f"↪️ *Mensagem reencaminhada:*\n\n{msg.get('content') or ''}"
+        enviado = await proveedor.enviar_mensaje(destino_limpo, texto_reencaminhado)
+        if enviado:
+            await guardar_mensaje(destino_limpo, "humano", texto_reencaminhado)
+
+    if enviado:
+        logger.info(f"Mensagem {mensagem_id} reencaminhada de {telefono} para {destino_limpo}")
+    else:
+        logger.warning(f"Falha ao reencaminhar mensagem {mensagem_id} para {destino_limpo}")
+
+    return RedirectResponse(url=f"/admin/conversa/{telefono}", status_code=303)
+
+
+@router.post("/conversa/{telefono}/limpar")
+async def limpar_conversa(telefono: str, auth: bool = Depends(verificar_password)):
+    """Apaga todo o histórico de uma conversa do registo do painel."""
+    await limpiar_historial(telefono)
+    logger.info(f"Conversa {telefono} limpa no painel")
+    return RedirectResponse(url="/admin/", status_code=303)
 
 
 @router.get("/media/{nome_arquivo}")

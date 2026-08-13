@@ -555,14 +555,31 @@ async def editar_mensagem(mensagem_id: int, novo_texto: str) -> bool:
 
 async def apagar_mensagem(mensagem_id: int) -> bool:
     """
-    Remove do registo local uma mensagem enviada manualmente pelo painel
-    (role 'humano'). Só apaga o registo local — não a remove do WhatsApp
-    do cliente, que já a recebeu.
+    Remove do registo local uma mensagem, seja do cliente, do bot ou
+    enviada manualmente pelo painel. Só apaga o registo local — não afeta
+    o que já foi entregue no WhatsApp (nem ao cliente, nem a quem enviou).
     """
     async with async_session() as session:
         msg = await session.get(Mensaje, mensagem_id)
-        if not msg or msg.role != "humano":
+        if not msg:
             return False
         await session.delete(msg)
         await session.commit()
         return True
+
+
+async def obter_mensagem(mensagem_id: int) -> dict | None:
+    """Retorna uma mensagem pelo id, para ações como reencaminhar."""
+    async with async_session() as session:
+        msg = await session.get(Mensaje, mensagem_id)
+        if not msg:
+            return None
+        return {
+            "id": msg.id,
+            "telefono": msg.telefono,
+            "role": msg.role,
+            "content": msg.content,
+            "tipo": msg.tipo,
+            "media_path": msg.media_path,
+            "nome_ficheiro": msg.nome_ficheiro,
+        }
