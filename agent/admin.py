@@ -184,8 +184,8 @@ ESTILO = """
                                                  justify-content: center; transition: all 0.12s ease; }
   .msg-acoes summary::-webkit-details-marker { display: none; }
   .msg-acoes summary:hover { background: rgba(10,125,79,0.18); }
-  .msg-acoes .btn-apagar { opacity: 0.9; }
-  .msg-acoes .btn-apagar:hover { background: rgba(192,57,43,0.18); opacity: 1; }
+  .msg-acoes .btn-apagar { background: rgba(192,57,43,0.16); color: var(--vermelho); }
+  .msg-acoes .btn-apagar:hover { background: rgba(192,57,43,0.32); }
   .msg-acoes details[open] { flex-basis: 100%; }
   .form-editar { display: flex; gap: 6px; margin-top: 6px; }
   .form-editar textarea { flex: 1; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--borda);
