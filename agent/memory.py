@@ -46,6 +46,10 @@ class Mensaje(Base):
     tipo: Mapped[str] = mapped_column(String(20), default="texto")  # texto, imagem, documento, audio, video
     media_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
     nome_ficheiro: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Preenchido quando a mensagem vai para a lixeira — None significa "não apagada".
+    # Mensagens na lixeira ficam recuperáveis 30 dias antes de serem removidas
+    # em definitivo (ver purgar_mensagens_apagadas_antigas).
+    apagada_em: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
 
 
 class Conversacion(Base):
@@ -154,7 +158,7 @@ async def obtener_historial(telefono: str, limite: int = 20) -> list[dict]:
     async with async_session() as session:
         query = (
             select(Mensaje)
-            .where(Mensaje.telefono == telefono)
+            .where(Mensaje.telefono == telefono, Mensaje.apagada_em.is_(None))
             .order_by(Mensaje.timestamp.desc())
             .limit(limite)
         )
@@ -186,7 +190,7 @@ async def obtener_mensagens_novas(telefono: str, desde_id: int) -> list[dict]:
     async with async_session() as session:
         query = (
             select(Mensaje)
-            .where(Mensaje.telefono == telefono, Mensaje.id > desde_id)
+            .where(Mensaje.telefono == telefono, Mensaje.id > desde_id, Mensaje.apagada_em.is_(None))
             .order_by(Mensaje.timestamp.asc())
         )
         result = await session.execute(query)
@@ -309,6 +313,7 @@ async def listar_conversaciones() -> list[dict]:
                 Mensaje.telefono,
                 func.max(Mensaje.timestamp).label("ultimo_timestamp"),
             )
+            .where(Mensaje.apagada_em.is_(None))
             .group_by(Mensaje.telefono)
             .subquery()
         )
@@ -316,7 +321,7 @@ async def listar_conversaciones() -> list[dict]:
             subquery,
             (Mensaje.telefono == subquery.c.telefono)
             & (Mensaje.timestamp == subquery.c.ultimo_timestamp),
-        ).order_by(subquery.c.ultimo_timestamp.desc())
+        ).where(Mensaje.apagada_em.is_(None)).order_by(subquery.c.ultimo_timestamp.desc())
         result = await session.execute(query)
         filas = result.all()
 
@@ -528,13 +533,14 @@ async def marcar_todos_alertas_vistos():
 
 
 async def limpiar_historial(telefono: str):
-    """Borra todo el historial de una conversación."""
+    """Move todo o histórico de uma conversa para a lixeira (recuperável 30 dias)."""
     async with async_session() as session:
-        query = select(Mensaje).where(Mensaje.telefono == telefono)
+        query = select(Mensaje).where(Mensaje.telefono == telefono, Mensaje.apagada_em.is_(None))
         result = await session.execute(query)
         mensajes = result.scalars().all()
+        agora = datetime.utcnow()
         for msg in mensajes:
-            await session.delete(msg)
+            msg.apagada_em = agora
         await session.commit()
 
 
@@ -555,17 +561,67 @@ async def editar_mensagem(mensagem_id: int, novo_texto: str) -> bool:
 
 async def apagar_mensagem(mensagem_id: int) -> bool:
     """
-    Remove do registo local uma mensagem, seja do cliente, do bot ou
-    enviada manualmente pelo painel. Só apaga o registo local — não afeta
-    o que já foi entregue no WhatsApp (nem ao cliente, nem a quem enviou).
+    Move uma mensagem para a lixeira do painel (cliente, bot ou manual). Fica
+    recuperável durante 30 dias (ver restaurar_mensagem) antes de ser
+    removida em definitivo. Não afeta o que já foi entregue no WhatsApp.
     """
     async with async_session() as session:
         msg = await session.get(Mensaje, mensagem_id)
         if not msg:
             return False
-        await session.delete(msg)
+        msg.apagada_em = datetime.utcnow()
         await session.commit()
         return True
+
+
+async def restaurar_mensagem(mensagem_id: int) -> bool:
+    """Recupera uma mensagem da lixeira, devolvendo-a à conversa."""
+    async with async_session() as session:
+        msg = await session.get(Mensaje, mensagem_id)
+        if not msg or msg.apagada_em is None:
+            return False
+        msg.apagada_em = None
+        await session.commit()
+        return True
+
+
+async def listar_mensagens_apagadas() -> list[dict]:
+    """Lista as mensagens na lixeira, mais recentemente apagadas primeiro."""
+    async with async_session() as session:
+        query = (
+            select(Mensaje, Conversacion.nome_contato)
+            .outerjoin(Conversacion, Mensaje.telefono == Conversacion.telefono)
+            .where(Mensaje.apagada_em.is_not(None))
+            .order_by(Mensaje.apagada_em.desc())
+        )
+        result = await session.execute(query)
+        return [
+            {
+                "id": msg.id,
+                "telefono": msg.telefono,
+                "nome_contato": nome_contato,
+                "role": msg.role,
+                "content": msg.content,
+                "tipo": msg.tipo,
+                "nome_ficheiro": msg.nome_ficheiro,
+                "apagada_em": msg.apagada_em,
+            }
+            for msg, nome_contato in result.all()
+        ]
+
+
+async def purgar_mensagens_apagadas_antigas(dias: int = 30) -> int:
+    """Remove em definitivo da base de dados as mensagens na lixeira há mais de N dias."""
+    limite = datetime.utcnow() - timedelta(days=dias)
+    async with async_session() as session:
+        query = select(Mensaje).where(Mensaje.apagada_em.is_not(None), Mensaje.apagada_em < limite)
+        result = await session.execute(query)
+        antigas = result.scalars().all()
+        for msg in antigas:
+            await session.delete(msg)
+        if antigas:
+            await session.commit()
+        return len(antigas)
 
 
 async def obter_mensagem(mensagem_id: int) -> dict | None:

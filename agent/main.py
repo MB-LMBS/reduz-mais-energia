@@ -25,6 +25,7 @@ from agent.memory import (
     establecer_nome_contato, obtener_nome_contato, obter_agendamentos_a_lembrar,
     marcar_lembrete_enviado, criar_alerta, guardar_evento_outlook_id,
     obtener_estado, establecer_estado, establecer_categoria,
+    purgar_mensagens_apagadas_antigas,
 )
 from agent.providers import obtener_proveedor
 from agent.notificacoes import (
@@ -79,10 +80,15 @@ async def loop_lembretes():
     """
     Verifica periodicamente se há chamadas agendadas a começar dentro de
     5 minutos e ainda não lembradas, e envia um aviso ao consultor e ao
-    próprio cliente.
+    próprio cliente. Aproveita o mesmo ciclo para esvaziar a lixeira de
+    mensagens com mais de 30 dias.
     """
     while True:
         try:
+            removidas = await purgar_mensagens_apagadas_antigas()
+            if removidas:
+                logger.info(f"Lixeira: {removidas} mensagem(ns) removida(s) em definitivo (>30 dias)")
+
             agora = datetime.now(ZoneInfo("Europe/Lisbon")).replace(tzinfo=None)
             pendentes = await obter_agendamentos_a_lembrar(agora)
             for agendamento in pendentes:

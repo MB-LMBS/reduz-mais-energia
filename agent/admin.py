@@ -29,7 +29,7 @@ from agent.memory import (
     establecer_categoria, CATEGORIAS_VALIDAS, guardar_mensaje, listar_agendamentos,
     editar_mensagem, apagar_mensagem, obter_mensagem, obtener_mensagens_novas,
     listar_alertas_nao_vistos, marcar_alerta_visto, marcar_todos_alertas_vistos,
-    cancelar_agendamento, limpiar_historial,
+    cancelar_agendamento, limpiar_historial, listar_mensagens_apagadas, restaurar_mensagem,
 )
 from agent.agenda import formatar_slot
 from agent.providers import obtener_proveedor
@@ -177,13 +177,15 @@ ESTILO = """
   .msg-acoes { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; justify-content: flex-end;
                margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(128,128,128,0.18); }
   .msg-acoes details, .msg-acoes > form { flex-shrink: 0; }
-  .msg-acoes summary, .msg-acoes .btn-apagar { font-size: 0.85rem; color: var(--texto-secundario); cursor: pointer;
-                                                 background: none; border: none; padding: 0; line-height: 1;
-                                                 list-style: none; transition: color 0.12s ease; }
+  .msg-acoes summary, .msg-acoes .btn-apagar { font-size: 1.35rem; color: var(--texto-secundario); cursor: pointer;
+                                                 background: rgba(128,128,128,0.14); border: none; padding: 0;
+                                                 line-height: 1; list-style: none; border-radius: 50%;
+                                                 width: 36px; height: 36px; display: flex; align-items: center;
+                                                 justify-content: center; transition: all 0.12s ease; }
   .msg-acoes summary::-webkit-details-marker { display: none; }
-  .msg-acoes summary:hover { color: var(--verde); }
-  .msg-acoes .btn-apagar { color: var(--vermelho); opacity: 0.85; }
-  .msg-acoes .btn-apagar:hover { opacity: 1; }
+  .msg-acoes summary:hover { background: rgba(10,125,79,0.18); }
+  .msg-acoes .btn-apagar { opacity: 0.9; }
+  .msg-acoes .btn-apagar:hover { background: rgba(192,57,43,0.18); opacity: 1; }
   .msg-acoes details[open] { flex-basis: 100%; }
   .form-editar { display: flex; gap: 6px; margin-top: 6px; }
   .form-editar textarea { flex: 1; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--borda);
@@ -251,6 +253,11 @@ ESTILO = """
                    background: var(--fundo-card); color: var(--vermelho); font-size: 0.85rem; font-weight: 500;
                    transition: all 0.12s ease; }
   .btn-cancelar:hover { background: var(--vermelho); color: white; }
+  .btn-restaurar { margin-top: 8px; padding: 7px 14px; border-radius: 8px; border: 1px solid var(--verde);
+                     background: var(--fundo-card); color: var(--verde); font-size: 0.85rem; font-weight: 500;
+                     transition: all 0.12s ease; }
+  .btn-restaurar:hover { background: var(--verde); color: white; }
+  .agendamento .validade { font-size: 0.8rem; color: var(--texto-secundario); margin-top: 4px; }
   .sync-ok { color: var(--verde); font-size: 0.9rem; }
   .sync-aviso { color: #a5701d; font-size: 0.9rem; background: #fff8e1; padding: 8px 12px; border-radius: 8px; }
 
@@ -518,6 +525,7 @@ async def painel(
         <div class="topo-direita">
           {_swatches_tema_html()}
           <a class="link-agenda" href="/admin/agenda">📅 Agenda</a>
+          <a class="link-agenda" href="/admin/lixeira">🗑️ Lixeira</a>
         </div>
       </div>
       {_relogio_feriados_html()}
@@ -600,6 +608,54 @@ async def agenda(auth: bool = Depends(verificar_password)):
     </body>
     </html>
     """
+
+
+@router.get("/lixeira", response_class=HTMLResponse)
+async def lixeira(auth: bool = Depends(verificar_password)):
+    """Lista as mensagens apagadas, recuperáveis durante 30 dias."""
+    apagadas = await listar_mensagens_apagadas()
+    agora = datetime.utcnow()
+
+    linhas = ""
+    for m in apagadas:
+        nome = html.escape(m["nome_contato"]) if m.get("nome_contato") else html.escape(m["telefono"])
+        conteudo = html.escape(m["content"] or f"[{m.get('nome_ficheiro') or m.get('tipo') or 'ficheiro'}]")
+        dias_passados = (agora - m["apagada_em"]).days
+        dias_restantes = max(0, 30 - dias_passados)
+        linhas += f"""
+        <div class="agendamento">
+          <div class="nome"><a href="/admin/conversa/{html.escape(m['telefono'])}">{nome}</a></div>
+          <div class="info">{conteudo}</div>
+          <div class="validade">Apagada há {dias_passados} dia(s) — remove-se em definitivo daqui a {dias_restantes} dia(s)</div>
+          <form method="post" action="/admin/lixeira/{m['id']}/restaurar">
+            <button type="submit" class="btn-restaurar">↩️ Restaurar</button>
+          </form>
+        </div>
+        """
+
+    if not apagadas:
+        linhas = "<p>A lixeira está vazia.</p>"
+
+    return f"""
+    <html>
+    <head><title>Lixeira — Reduz+ Energia</title>{ESTILO}{FAVICON_LINK}
+    <meta name="viewport" content="width=device-width, initial-scale=1"></head>
+    <body>
+      {SCRIPT_TEMA}
+      <a href="/admin/">&larr; Conversas</a>
+      <h1>Lixeira</h1>
+      <p>Mensagens apagadas ficam aqui 30 dias antes de serem removidas em definitivo.</p>
+      {linhas}
+    </body>
+    </html>
+    """
+
+
+@router.post("/lixeira/{mensagem_id}/restaurar")
+async def restaurar_mensagem_lixeira(mensagem_id: int, auth: bool = Depends(verificar_password)):
+    """Recupera uma mensagem da lixeira."""
+    await restaurar_mensagem(mensagem_id)
+    return RedirectResponse(url="/admin/lixeira", status_code=303)
 
 
 @router.get("/outlook/conectar")
@@ -764,7 +820,7 @@ def _render_mensagem(msg: dict, telefono: str) -> str:
             </form>
           </details>
           <form method="post" action="/admin/conversa/{telefono}/mensagem/{msg['id']}/apagar"
-                onsubmit="return confirm('Apagar esta mensagem do registo? Isto não a remove do WhatsApp de quem já a recebeu.')">
+                onsubmit="return confirm('Apagar esta mensagem? Vai para a lixeira 30 dias antes de ser removida em definitivo. Não afeta o WhatsApp de quem já a recebeu.')">
             <button type="submit" class="btn-apagar" title="Apagar">🗑️</button>
           </form>
         </div>
@@ -807,7 +863,7 @@ async def ver_conversa(telefono: str, auth: bool = Depends(verificar_password)):
                 <button type="submit" class="btn-consultor">📞 Encaminhar para consultor</button>
               </form>''' if NUMERO_CONSULTOR else ''}
               <form method="post" action="/admin/conversa/{telefono}/limpar"
-                     onsubmit="return confirm('Limpar toda esta conversa do painel? Isto apaga o registo todo — não pode ser desfeito, e não afeta o que já foi entregue no WhatsApp.')">
+                     onsubmit="return confirm('Limpar toda esta conversa do painel? Vai para a lixeira 30 dias antes de ser removida em definitivo. Não afeta o que já foi entregue no WhatsApp.')">
                 <button type="submit" class="btn-limpar">🧹 Limpar conversa</button>
               </form>
 
