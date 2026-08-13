@@ -240,6 +240,19 @@ ESTILO = """
   .alertas-topo button { padding: 5px 12px; border-radius: 8px; border: 1px solid var(--borda);
                           background: var(--fundo-card); color: var(--texto); font-size: 0.8rem; transition: all 0.12s ease; }
   .alertas-topo button:hover { filter: brightness(0.96); }
+  .agenda-widget { background: var(--fundo-card); border-radius: 14px; padding: 12px 14px; margin-bottom: 12px;
+                    box-shadow: var(--sombra); }
+  .agenda-topo { font-weight: 600; font-size: 0.9rem; margin-bottom: 8px; }
+  .agenda-item { display: flex; align-items: center; gap: 10px; padding: 7px 0;
+                  border-top: 1px solid var(--borda); font-size: 0.88rem; }
+  .agenda-item:first-of-type { border-top: none; }
+  .agenda-item .quando { color: var(--verde); font-weight: 600; flex-shrink: 0; white-space: nowrap; }
+  .agenda-item .nome { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .btn-cancelar-mini { flex-shrink: 0; padding: 4px 10px; border-radius: 8px; border: 1px solid var(--vermelho);
+                         background: var(--fundo-card); color: var(--vermelho); font-size: 0.78rem;
+                         transition: all 0.12s ease; }
+  .btn-cancelar-mini:hover { background: var(--vermelho); color: white; }
+  .agenda-ver-todas { display: block; text-align: center; margin-top: 8px; font-size: 0.85rem; }
   .link-agenda { padding: 9px 16px; border-radius: 10px; background: var(--fundo-card); color: var(--texto-secundario);
                  font-size: 0.9rem; font-weight: 500; border: 1px solid var(--borda); box-shadow: var(--sombra);
                  transition: box-shadow 0.12s ease; }
@@ -455,6 +468,37 @@ def _render_alertas(alertas: list[dict]) -> str:
     """
 
 
+def _render_agenda_widget(agendamentos: list[dict], limite: int = 5) -> str:
+    """Mostra as próximas chamadas agendadas diretamente na caixa de mensagens,
+    para não ser preciso ir a uma página à parte."""
+    if not agendamentos:
+        return ""
+    linhas = ""
+    for a in agendamentos[:limite]:
+        telefone = html.escape(a["telefono"])
+        nome = html.escape(a["nome_cliente"]) if a.get("nome_cliente") else telefone
+        quando = formatar_slot(a["data_hora"])
+        linhas += f"""
+        <div class="agenda-item">
+          <div class="quando">{quando}</div>
+          <a class="nome" href="/admin/conversa/{telefone}">{nome}</a>
+          <form method="post" action="/admin/agenda/{a['id']}/cancelar"
+                onsubmit="return confirm('Cancelar esta chamada? Também será removida do Cal.com.')">
+            <button type="submit" class="btn-cancelar-mini">Cancelar</button>
+          </form>
+        </div>
+        """
+    resto = len(agendamentos) - limite
+    rodape = f'<a class="agenda-ver-todas" href="/admin/agenda">Ver todas ({len(agendamentos)}) →</a>' if resto > 0 else ""
+    return f"""
+    <div class="agenda-widget">
+      <div class="agenda-topo"><span>📅 Próximas chamadas</span></div>
+      {linhas}
+      {rodape}
+    </div>
+    """
+
+
 @router.get("/", response_class=HTMLResponse)
 async def painel(
     estado: str = "aberta", categoria: str = "todas", vista: str = "",
@@ -469,6 +513,7 @@ async def painel(
     """
     alertas = await listar_alertas_nao_vistos()
     alertas_html = _render_alertas(alertas)
+    agenda_html = _render_agenda_widget(await listar_agendamentos())
     todas = await listar_conversaciones()
     n_abertas = sum(1 for c in todas if c["estado"] == "aberta")
     n_tratadas = sum(1 for c in todas if c["estado"] == "tratada")
@@ -535,6 +580,7 @@ async def painel(
       </div>
       {_relogio_feriados_html()}
       {alertas_html}
+      {agenda_html}
       <div class="tabs">
         <a href="/admin/?estado=aberta&categoria={categoria}" class="{'ativo' if not vista and estado == 'aberta' else ''}">Mensagens em Aberto ({n_abertas})</a>
         <a href="/admin/?estado=tratada&categoria={categoria}" class="{'ativo' if not vista and estado == 'tratada' else ''}">Mensagens Tratadas ({n_tratadas})</a>
