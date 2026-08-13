@@ -18,6 +18,7 @@ import logging
 import mimetypes
 from datetime import datetime
 from zoneinfo import ZoneInfo
+from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, HTTPException, Form, File, UploadFile
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
@@ -152,6 +153,11 @@ ESTILO = """
          white-space: pre-wrap; }
   .msg strong { font-weight: 700; }
   .msg em { font-style: italic; }
+  .msg .campo { font-weight: 600; }
+  .msg .link-botao { display: inline-block; margin: 5px 6px 2px 0; padding: 7px 14px; border-radius: 20px;
+                      background: var(--verde); color: #fff; text-decoration: none; font-size: 0.85rem;
+                      font-weight: 600; white-space: nowrap; }
+  .msg .link-botao:active { opacity: 0.85; }
   .msg.user { background: var(--fundo-card); margin-right: auto; border-bottom-left-radius: 4px; }
   .msg.assistant { background: linear-gradient(135deg, var(--bolha-bot-1), var(--bolha-bot-2)); margin-left: auto;
                     border-bottom-right-radius: 4px; }
@@ -635,22 +641,47 @@ URL_REGEX = re.compile(r'https?://[^\s<>"]+')
 NEGRITO_REGEX = re.compile(r'(?<!\w)\*([^*\n]+)\*(?!\w)')
 ITALICO_REGEX = re.compile(r'(?<!\w)_([^_\n]+)_(?!\w)')
 RISCADO_REGEX = re.compile(r'(?<!\w)~([^~\n]+)~(?!\w)')
+# "Campo: valor" no início de uma linha (ex: "Nome: João") — o rótulo antes
+# dos dois pontos fica com destaque intermédio, entre o texto normal e os
+# tópicos em *negrito*. Exige pelo menos uma letra, para não apanhar horas
+# tipo "14:30" no início de uma linha.
+CAMPO_REGEX = re.compile(r'^([^\n:]{1,40}):(?=[ \t])', re.MULTILINE)
+
+
+def _substituir_campo(m: re.Match) -> str:
+    rotulo = m.group(1)
+    if not re.search(r"[A-Za-zÀ-ÖØ-öø-ÿ]", rotulo):
+        return m.group(0)
+    return f'<b class="campo">{rotulo}</b>:'
 
 
 def _aplicar_markdown_whatsapp(texto_escapado: str) -> str:
-    """Converte a formatação do WhatsApp (*negrito*, _itálico_, ~riscado~) em HTML.
+    """Converte a formatação do WhatsApp (*negrito*, _itálico_, ~riscado~) em
+    HTML, e dá destaque intermédio aos rótulos "Campo:" no início de linha.
 
     Aplica-se a texto que já passou por html.escape() — os marcadores
-    *_~ não são caracteres especiais de HTML, por isso não interferem.
+    *_~ não são caracteres especiais de HTML, por isso não interferem. A
+    deteção de "Campo:" corre primeiro, para não interferir com as tags
+    <strong>/<em>/<del> já inseridas nos passos seguintes.
     """
+    texto_escapado = CAMPO_REGEX.sub(_substituir_campo, texto_escapado)
     texto_escapado = NEGRITO_REGEX.sub(r"<strong>\1</strong>", texto_escapado)
     texto_escapado = ITALICO_REGEX.sub(r"<em>\1</em>", texto_escapado)
     texto_escapado = RISCADO_REGEX.sub(r"<del>\1</del>", texto_escapado)
     return texto_escapado
 
 
+def _rotulo_link(url: str) -> str:
+    """Rótulo curto para mostrar num botão em vez do URL completo."""
+    try:
+        dominio = urlparse(url).netloc.removeprefix("www.")
+    except ValueError:
+        dominio = ""
+    return f"🔗 Abrir link ({dominio})" if dominio else "🔗 Abrir link"
+
+
 def _linkificar(texto: str) -> str:
-    """Escapa o texto de uma mensagem, transforma URLs em links clicáveis, e
+    """Escapa o texto de uma mensagem, transforma URLs em botões de link, e
     aplica a formatação do WhatsApp — para o texto aparecer no painel
     organizado tal como aparece no WhatsApp do cliente."""
     partes = []
@@ -659,7 +690,8 @@ def _linkificar(texto: str) -> str:
         antes = html.escape(texto[posicao:m.start()])
         partes.append(_aplicar_markdown_whatsapp(antes))
         url_escapado = html.escape(m.group(0))
-        partes.append(f'<a href="{url_escapado}" target="_blank" rel="noopener">{url_escapado}</a>')
+        rotulo = html.escape(_rotulo_link(m.group(0)))
+        partes.append(f'<a class="link-botao" href="{url_escapado}" target="_blank" rel="noopener">{rotulo}</a>')
         posicao = m.end()
     resto = html.escape(texto[posicao:])
     partes.append(_aplicar_markdown_whatsapp(resto))
