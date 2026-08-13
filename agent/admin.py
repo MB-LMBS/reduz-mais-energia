@@ -148,7 +148,10 @@ ESTILO = """
   .preview { color: var(--texto-secundario); font-size: 0.9rem; margin-top: 4px; white-space: nowrap;
              overflow: hidden; text-overflow: ellipsis; }
   .msg { padding: 9px 13px; border-radius: 16px; margin-bottom: 10px; max-width: 80%; word-break: break-word;
-         box-shadow: var(--sombra); position: relative; line-height: 1.4; color: var(--texto); }
+         box-shadow: var(--sombra); position: relative; line-height: 1.4; color: var(--texto);
+         white-space: pre-wrap; }
+  .msg strong { font-weight: 700; }
+  .msg em { font-style: italic; }
   .msg.user { background: var(--fundo-card); margin-right: auto; border-bottom-left-radius: 4px; }
   .msg.assistant { background: linear-gradient(135deg, var(--bolha-bot-1), var(--bolha-bot-2)); margin-left: auto;
                     border-bottom-right-radius: 4px; }
@@ -629,18 +632,37 @@ def _formatar_hora(timestamp: datetime | None) -> str:
 
 
 URL_REGEX = re.compile(r'https?://[^\s<>"]+')
+NEGRITO_REGEX = re.compile(r'(?<!\w)\*([^*\n]+)\*(?!\w)')
+ITALICO_REGEX = re.compile(r'(?<!\w)_([^_\n]+)_(?!\w)')
+RISCADO_REGEX = re.compile(r'(?<!\w)~([^~\n]+)~(?!\w)')
+
+
+def _aplicar_markdown_whatsapp(texto_escapado: str) -> str:
+    """Converte a formatação do WhatsApp (*negrito*, _itálico_, ~riscado~) em HTML.
+
+    Aplica-se a texto que já passou por html.escape() — os marcadores
+    *_~ não são caracteres especiais de HTML, por isso não interferem.
+    """
+    texto_escapado = NEGRITO_REGEX.sub(r"<strong>\1</strong>", texto_escapado)
+    texto_escapado = ITALICO_REGEX.sub(r"<em>\1</em>", texto_escapado)
+    texto_escapado = RISCADO_REGEX.sub(r"<del>\1</del>", texto_escapado)
+    return texto_escapado
 
 
 def _linkificar(texto: str) -> str:
-    """Escapa o texto de uma mensagem e transforma URLs em links clicáveis."""
+    """Escapa o texto de uma mensagem, transforma URLs em links clicáveis, e
+    aplica a formatação do WhatsApp — para o texto aparecer no painel
+    organizado tal como aparece no WhatsApp do cliente."""
     partes = []
     posicao = 0
     for m in URL_REGEX.finditer(texto):
-        partes.append(html.escape(texto[posicao:m.start()]))
+        antes = html.escape(texto[posicao:m.start()])
+        partes.append(_aplicar_markdown_whatsapp(antes))
         url_escapado = html.escape(m.group(0))
         partes.append(f'<a href="{url_escapado}" target="_blank" rel="noopener">{url_escapado}</a>')
         posicao = m.end()
-    partes.append(html.escape(texto[posicao:]))
+    resto = html.escape(texto[posicao:])
+    partes.append(_aplicar_markdown_whatsapp(resto))
     return "".join(partes)
 
 
