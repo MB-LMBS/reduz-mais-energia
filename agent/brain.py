@@ -282,15 +282,27 @@ async def obtener_contexto_agenda() -> str:
             "informa o cliente e sugere que a equipa entre em contacto por outra via."
         )
 
-    todos_slots = await obter_horarios_disponiveis(dias_a_frente=7)
-    slots = todos_slots[:3]
-    if not slots:
+    todos_slots = await obter_horarios_disponiveis(dias_a_frente=10)
+    if not todos_slots:
         return (
             "\n\n## Agendamento de chamadas\n"
             "De momento não há horários disponíveis nos próximos dias — informa "
             "o cliente e sugere que a equipa entre em contacto por outra via."
         )
-    linhas = "\n".join(f"- {formatar_slot(slot)}" for slot in slots)
+
+    # Agrupa por dia (até 4 dias distintos), para o cliente escolher primeiro
+    # o dia e só depois a hora, em vez de ver uma lista de horas seguidas
+    por_dia: dict = {}
+    for slot in todos_slots:
+        por_dia.setdefault(slot.date(), []).append(slot)
+
+    linhas = []
+    for dia, horarios_do_dia in list(por_dia.items())[:4]:
+        nome_dia = DIAS_SEMANA[dia.weekday()]
+        horas = ", ".join(h.strftime("%Hh%M") for h in horarios_do_dia)
+        linhas.append(f"- {nome_dia}, {dia.strftime('%d/%m')} — horas livres: {horas}")
+    bloco_dias = "\n".join(linhas)
+
     return (
         "\n\n## Agendamento de chamadas\n"
         "Não ofereças uma chamada logo na primeira mensagem nem em resposta a "
@@ -299,17 +311,23 @@ async def obtener_contexto_agenda() -> str:
         "cliente procura. Só ofereças a chamada depois de o cliente mostrar "
         "interesse real no serviço (ex: já perguntou sobre uma solução "
         "específica, quer avançar, ou pede para falar com alguém).\n"
-        "Os próximos horários realmente livres na agenda são:\n"
-        f"{linhas}\n"
-        "Quando ofereceres, sugere apenas 2 ou 3 horários — não despejes uma "
-        "lista longa. Usa SEMPRE a ferramenta oferecer_opcoes para "
-        "apresentares esses horários como botões clicáveis — nunca escrevas "
-        "os horários em texto normal, para o cliente não ter de os escrever "
-        "à mão. Depois de o cliente escolher um botão, confirma o nome dele "
+        "Os próximos dias com disponibilidade real, e as horas livres em "
+        "cada um, são:\n"
+        f"{bloco_dias}\n\n"
+        "Para agendar, segue SEMPRE este processo em dois passos separados, "
+        "usando a ferramenta oferecer_opcoes em cada um (nunca escrevas dias "
+        "ou horas em texto normal, para o cliente não ter de os escrever à mão):\n"
+        "1. Pergunta primeiro que DIA prefere, oferecendo 2 ou 3 dos dias "
+        "acima como botões (ex: 'Quinta-feira, 14/08').\n"
+        "2. Só depois de escolher o dia, pergunta a que HORA, oferecendo 2 "
+        "ou 3 horários livres desse dia específico como botões (ex: '15h00').\n"
+        "Nunca ofereças dia e hora ao mesmo tempo numa única pergunta, e "
+        "nunca misturas horários de dias diferentes na mesma lista de botões. "
+        "Depois de o cliente escolher o dia e a hora, confirma o nome dele "
         "e o motivo da chamada, e só depois usa a ferramenta "
-        "agendar_chamada para a marcar. Só sugere horários desta lista — "
-        "se o cliente pedir outro dia/hora fora dela, explica que não está "
-        "disponível e apresenta de novo as opções livres."
+        "agendar_chamada para a marcar. Só sugere dias/horas desta lista — "
+        "se o cliente pedir algo fora dela, explica que não está disponível "
+        "e apresenta de novo as opções livres."
     )
 
 
