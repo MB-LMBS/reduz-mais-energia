@@ -25,7 +25,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 
 from agent.memory import (
     listar_conversaciones, obtener_historial, obtener_modo, establecer_modo,
-    obtener_estado, establecer_estado, obtener_nome_contato, obtener_categoria,
+    obtener_estado, establecer_estado, obtener_nome_contato, establecer_nome_contato, obtener_categoria,
     establecer_categoria, CATEGORIAS_VALIDAS, guardar_mensaje, listar_agendamentos,
     editar_mensagem, apagar_mensagem, obter_mensagem, obtener_mensagens_novas,
     listar_alertas_nao_vistos, marcar_alerta_visto, marcar_todos_alertas_vistos,
@@ -193,8 +193,8 @@ ESTILO = """
   .form-editar button { padding: 0 12px; border-radius: 8px; border: none; background: var(--verde);
                           color: white; font-weight: 600; transition: background 0.12s ease; }
   .form-editar button:hover { background: var(--verde-escuro); }
-  .form-reencaminhar { display: flex; gap: 6px; margin-top: 6px; }
-  .form-reencaminhar input { flex: 1; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--borda);
+  .form-reencaminhar { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+  .form-reencaminhar input { flex: 1; min-width: 110px; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--borda);
                                background: var(--fundo-card); color: var(--texto); min-width: 0; }
   .form-reencaminhar button { padding: 0 12px; border-radius: 8px; border: none; background: var(--azul);
                                 color: white; font-weight: 600; transition: background 0.12s ease; }
@@ -816,6 +816,7 @@ def _render_mensagem(msg: dict, telefono: str) -> str:
             <summary title="Reencaminhar">↪️</summary>
             <form class="form-reencaminhar" method="post" action="/admin/conversa/{telefono}/mensagem/{msg['id']}/reencaminhar">
               <input type="text" name="destino" placeholder="Número (ex: 351912345678)" required>
+              <input type="text" name="nome" placeholder="Nome (opcional)">
               <button type="submit">Enviar</button>
             </form>
           </details>
@@ -1051,13 +1052,17 @@ async def apagar_mensagem_manual(telefono: str, mensagem_id: int, auth: bool = D
 
 @router.post("/conversa/{telefono}/mensagem/{mensagem_id}/reencaminhar")
 async def reencaminhar_mensagem(
-    telefono: str, mensagem_id: int, destino: str = Form(...), auth: bool = Depends(verificar_password),
+    telefono: str, mensagem_id: int, destino: str = Form(...), nome: str = Form(""),
+    auth: bool = Depends(verificar_password),
 ):
     """Reenvia o conteúdo de uma mensagem (texto ou ficheiro) para outro número de WhatsApp."""
     destino_limpo = re.sub(r"\D", "", destino)
     msg = await obter_mensagem(mensagem_id)
     if not msg or not destino_limpo:
         return RedirectResponse(url=f"/admin/conversa/{telefono}", status_code=303)
+
+    if nome.strip():
+        await establecer_nome_contato(destino_limpo, nome.strip())
 
     proveedor = obtener_proveedor()
     if msg.get("media_path") and os.path.isfile(msg["media_path"]):
