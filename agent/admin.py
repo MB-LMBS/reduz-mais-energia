@@ -106,7 +106,7 @@ ESTILO = """
               margin-left: 4px; white-space: nowrap; }
   .tag-tipo.nacional { color: var(--verde); border-color: var(--verde); }
   .tag-tipo.local { color: var(--azul); border-color: var(--azul); }
-  .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
   .tabs a { flex: 1; text-align: center; padding: 10px; border-radius: 10px; background: var(--fundo-card);
             color: var(--texto-secundario); font-size: 0.9rem; font-weight: 500; box-shadow: var(--sombra);
             transition: transform 0.12s ease, box-shadow 0.12s ease; }
@@ -423,15 +423,28 @@ def _render_alertas(alertas: list[dict]) -> str:
 
 
 @router.get("/", response_class=HTMLResponse)
-async def painel(estado: str = "aberta", categoria: str = "todas", auth: bool = Depends(verificar_password)):
-    """Lista as conversas do estado escolhido, com filtro opcional por categoria comercial."""
+async def painel(
+    estado: str = "aberta", categoria: str = "todas", vista: str = "",
+    auth: bool = Depends(verificar_password),
+):
+    """Lista as conversas do estado escolhido, com filtro opcional por categoria comercial.
+
+    A vista "interesse" é um separador à parte dos habituais Em aberto/Tratadas —
+    mostra todas as conversas marcadas como "Com interesse" (ex: pedidos vindos do
+    simulador de eletricidade), independentemente de estarem abertas ou tratadas.
+    """
     alertas = await listar_alertas_nao_vistos()
     alertas_html = _render_alertas(alertas)
     todas = await listar_conversaciones()
-    do_estado = [c for c in todas if c["estado"] == estado]
-    conversas = do_estado if categoria == "todas" else [c for c in do_estado if c["categoria"] == categoria]
     n_abertas = sum(1 for c in todas if c["estado"] == "aberta")
     n_tratadas = sum(1 for c in todas if c["estado"] == "tratada")
+    n_interesse = sum(1 for c in todas if c["categoria"] == "interessado")
+
+    if vista == "interesse":
+        conversas = [c for c in todas if c["categoria"] == "interessado"]
+    else:
+        do_estado = [c for c in todas if c["estado"] == estado]
+        conversas = do_estado if categoria == "todas" else [c for c in do_estado if c["categoria"] == categoria]
 
     linhas = ""
     for c in conversas:
@@ -485,10 +498,11 @@ async def painel(estado: str = "aberta", categoria: str = "todas", auth: bool = 
       {_relogio_feriados_html()}
       {alertas_html}
       <div class="tabs">
-        <a href="/admin/?estado=aberta&categoria={categoria}" class="{'ativo' if estado == 'aberta' else ''}">Em aberto ({n_abertas})</a>
-        <a href="/admin/?estado=tratada&categoria={categoria}" class="{'ativo' if estado == 'tratada' else ''}">Tratadas ({n_tratadas})</a>
+        <a href="/admin/?estado=aberta&categoria={categoria}" class="{'ativo' if not vista and estado == 'aberta' else ''}">Em aberto ({n_abertas})</a>
+        <a href="/admin/?estado=tratada&categoria={categoria}" class="{'ativo' if not vista and estado == 'tratada' else ''}">Tratadas ({n_tratadas})</a>
+        <a href="/admin/?vista=interesse" class="{'ativo' if vista == 'interesse' else ''}">Interesse numa proposta ({n_interesse})</a>
       </div>
-      <div class="filtros">{filtros_categoria}</div>
+      {'' if vista == 'interesse' else f'<div class="filtros">{filtros_categoria}</div>'}
       {linhas}
       <script>setInterval(function() {{ location.reload(); }}, 20000);</script>
     </body>
