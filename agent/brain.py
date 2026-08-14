@@ -135,12 +135,19 @@ HERRAMIENTAS = [
     {
         "name": "cancelar_chamada",
         "description": (
-            "Usa esta ferramenta quando o cliente pedir para cancelar ou "
-            "desmarcar uma chamada já agendada. Não precisas de perguntar "
-            "mais nada antes — a ferramenta procura automaticamente a "
-            "chamada ativa deste número. Se ele quiser remarcar para outro "
-            "horário, cancela primeiro com esta ferramenta e depois segue o "
-            "processo normal de agendamento para o novo horário."
+            "Usa esta ferramenta IMEDIATAMENTE, na mesma resposta, assim que "
+            "o cliente pedir para cancelar ou desmarcar uma chamada já "
+            "agendada — mesmo que seja só \"cancela\" ou \"sim\". NUNCA "
+            "perguntes primeiro se ele confirma, e nunca deixes essa "
+            "confirmação para a mensagem seguinte: chama já a ferramenta "
+            "nesta resposta. A ferramenta procura sozinha a chamada ativa "
+            "deste número — só depois de ela correr é que sabes se foi "
+            "cancelada, e só aí confirmas ao cliente. É PROIBIDO dizeres ao "
+            "cliente que uma chamada foi cancelada sem teres chamado esta "
+            "ferramenta nesta mesma resposta — nunca assumas ou inventes "
+            "esse resultado. Se ele quiser remarcar para outro horário, "
+            "cancela primeiro com esta ferramenta e depois segue o processo "
+            "normal de agendamento para o novo horário."
         ),
         "input_schema": {
             "type": "object",
