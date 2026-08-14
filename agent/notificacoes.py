@@ -155,15 +155,22 @@ async def notificar_convidados(
 ) -> int:
     """
     Avisa cada convidado por WhatsApp de um compromisso da agenda pessoal do
-    consultor, via template pré-aprovado (convite_reuniao_convidado_v3,
+    consultor, via template pré-aprovado (convite_reuniao_convidado_v4,
     categoria UTILITY) — necessário para o negócio iniciar a conversa fora
-    da janela de 24h. Retorna quantos convites foram enviados com sucesso.
+    da janela de 24h. Sem campo de texto livre: as 3 tentativas anteriores
+    (com uma variável para uma nota arbitrária) foram todas rejeitadas pela
+    Meta — a causa provável é que a Meta bloqueia templates com variáveis
+    que aceitem texto não revisto, mesmo quando pequenas. `nota` é ignorada
+    aqui de propósito (mantida no parâmetro só para não partir quem chama
+    esta função) — a nota pessoal do Luis fica só na descrição do evento,
+    nunca é reenviada ao convidado. Retorna quantos convites foram enviados
+    com sucesso.
     """
-    extra = nota.strip() if nota and nota.strip() else "Agradecemos a confirmação da sua presença."
+    quando = f"{data_str} às {hora_str}"
     sucesso = 0
     for numero in convidados:
         ok = await proveedor.enviar_template(
-            numero, "convite_reuniao_convidado_v3", [descricao, data_str, hora_str, extra],
+            numero, "convite_reuniao_convidado_v4", [descricao, quando],
         )
         if ok:
             sucesso += 1
