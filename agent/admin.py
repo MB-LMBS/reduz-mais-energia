@@ -32,6 +32,7 @@ from agent.memory import (
     cancelar_agendamento, limpiar_historial, listar_mensagens_apagadas, restaurar_mensagem,
     marcar_alertas_agendamento_vistos, obter_config, definir_config,
 )
+from agent.motivacao import enviar_mensagens_periodo, CONSULTORES
 from agent.agenda import formatar_slot
 from agent.providers import obtener_proveedor
 from agent.notificacoes import notificar_consultor, NUMERO_CONSULTOR
@@ -623,6 +624,14 @@ async def debug_limpar_estado_motivacao(auth: bool = Depends(verificar_password)
     anterior = await obter_config("motivacao_estado") or "(vazio)"
     await definir_config("motivacao_estado", "{}")
     return f"Estado anterior: {anterior}\nLimpo."
+
+
+@router.post("/debug/motivacao/enviar-agora", response_class=PlainTextResponse)
+async def debug_enviar_motivacao_agora(periodo: str = "fim_dia", auth: bool = Depends(verificar_password)):
+    """Rota de diagnóstico temporária — dispara o envio imediatamente, sem esperar pela janela de horário."""
+    proveedor = obtener_proveedor()
+    sucesso = await enviar_mensagens_periodo(proveedor, periodo)
+    return f"Enviadas com sucesso: {sucesso}/{len(CONSULTORES)}"
 
 
 @router.get("/agenda", response_class=HTMLResponse)
