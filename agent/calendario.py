@@ -98,9 +98,19 @@ async def criar_evento_chamada(agendamento_id: int, nome_cliente, telefono: str,
 
 
 def _apagar_evento_sync(agendamento_id: int):
+    # Não usa calendario.event_by_uid()/search(uid=...) — o iCloud responde
+    # 412 Precondition Failed a essa pesquisa (incompatibilidade do lado
+    # deles). Listar os eventos e filtrar do nosso lado funciona sem problema.
     calendario = _obter_calendario()
-    evento = calendario.event_by_uid(_uid_evento(agendamento_id))
-    evento.delete()
+    uid_alvo = _uid_evento(agendamento_id)
+    for evento in calendario.events():
+        try:
+            if evento.icalendar_component.get("uid") == uid_alvo:
+                evento.delete()
+                return
+        except Exception:
+            continue
+    raise NotFoundError(f"Evento {uid_alvo} não encontrado no iCloud Calendar")
 
 
 async def apagar_evento_chamada(agendamento_id: int) -> bool:

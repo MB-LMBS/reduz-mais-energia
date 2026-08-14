@@ -21,7 +21,7 @@ from agent.memory import (
     obter_agendamento_ativo_por_telefone, cancelar_agendamento, criar_alerta,
     marcar_alertas_agendamento_vistos,
 )
-from agent.calendario import apagar_evento_chamada as apagar_evento_icloud
+from agent.calendario import criar_evento_chamada as criar_evento_icloud, apagar_evento_chamada as apagar_evento_icloud
 from agent.outlook_calendar import apagar_evento_chamada as apagar_evento_outlook
 from agent.notificacoes import notificar_cancelamento
 from agent.providers import obtener_proveedor
@@ -464,6 +464,9 @@ async def _processar_agendamento(entrada: dict, telefono: str) -> tuple[str, dic
         uid = reserva.get("uid")
         if uid:
             await guardar_evento_calcom_uid(agendamento_id, uid)
+        # Reforço direto ao iCloud — o Cal.com nem sempre escreve no calendário
+        # externo ligado quando a marcação é criada pela API (bug conhecido deles)
+        await criar_evento_icloud(agendamento_id, nome or None, telefone, data_hora, informacao)
 
     dados = {
         "id": agendamento_id,
