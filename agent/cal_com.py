@@ -109,11 +109,16 @@ async def obter_horarios_disponiveis_intervalo(inicio, fim) -> list[datetime]:
 
 async def criar_reserva(
     inicio: datetime, nome_cliente: str, telefone: str, informacao: str = "",
+    sem_restricoes: bool = False,
 ) -> dict | None:
     """
     Cria uma marcação real no Cal.com. `inicio` deve ser timezone-aware.
     Retorna os dados da reserva criada (incluindo "uid", útil para cancelar),
     ou None se falhar.
+
+    `sem_restricoes=True` ignora a disponibilidade configurada (dias/horas,
+    antecedência mínima, conflitos) — usado só para a agenda pessoal do
+    próprio consultor, nunca para clientes.
     """
     if not calcom_configurado():
         return None
@@ -135,6 +140,10 @@ async def criar_reserva(
     }
     if informacao:
         corpo["bookingFieldsResponses"] = {"notes": informacao}
+    if sem_restricoes:
+        corpo["allowBookingOutOfBounds"] = True
+        corpo["skipBookingLimits"] = True
+        corpo["allowConflicts"] = True
 
     async with httpx.AsyncClient(timeout=30) as client:
         r = await client.post(f"{BASE_URL}/v2/bookings", headers=_headers("2026-02-25"), json=corpo)

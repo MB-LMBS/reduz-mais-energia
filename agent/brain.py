@@ -26,7 +26,7 @@ from agent.memory import (
 )
 from agent.calendario import criar_evento_chamada as criar_evento_icloud, apagar_evento_chamada as apagar_evento_icloud
 from agent.outlook_calendar import apagar_evento_chamada as apagar_evento_outlook
-from agent.notificacoes import notificar_cancelamento
+from agent.notificacoes import notificar_cancelamento, NUMERO_CONSULTOR
 from agent.providers import obtener_proveedor
 
 load_dotenv()
@@ -330,12 +330,32 @@ def obtener_contexto_temporal() -> str:
     )
 
 
-async def obtener_contexto_agenda() -> str:
+async def obtener_contexto_agenda(telefono: str = "") -> str:
     """
     Genera un bloque con los próximos horarios libres para chamadas telefónicas,
     consultados em tempo real ao Cal.com, para que o modelo os ofereça
     diretamente sem inventar horas.
+
+    Quando é o próprio consultor a escrever (o número dele, NUMERO_CONSULTOR),
+    a agenda é pessoal e não tem as restrições impostas aos clientes.
     """
+    if telefono and NUMERO_CONSULTOR and telefono == NUMERO_CONSULTOR:
+        return (
+            "\n\n## Agendamento — esta é a SUA agenda pessoal\n"
+            "Está a falar com o próprio consultor (Luis Sequeira), na conversa "
+            "que ele usa como a sua agenda pessoal — não é um cliente. Aqui não "
+            "há restrições nenhumas: pode pedir para marcar QUALQUER dia e "
+            "hora (mesmo fora de Segunda-Sábado 15h-19h, ou com pouca "
+            "antecedência), e o texto/descrição pode ser sobre o que ele "
+            "quiser (não precisa de ser sobre um cliente ou proposta). Não "
+            "perguntes o \"motivo da chamada\" como se fosse um cliente — usa "
+            "a descrição que ele der, ou deixa em branco se ele não indicar "
+            "nada. Interpreta a data/hora que ele pedir (mesmo relativa, tipo "
+            "\"amanhã às 8\") e usa a ferramenta agendar_chamada diretamente "
+            "com essa data/hora — não precisas de consultar disponibilidade "
+            "nem de sugerir horários de uma lista."
+        )
+
     if not calcom_configurado():
         return (
             "\n\n## Agendamento de chamadas\n"
@@ -427,7 +447,9 @@ def obtener_contexto_cliente(nome_contato: str | None, primeira_mensagem: bool) 
     return "\n".join(linhas)
 
 
-async def montar_system_blocks(nome_contato: str | None, primeira_mensagem: bool) -> list[dict]:
+async def montar_system_blocks(
+    nome_contato: str | None, primeira_mensagem: bool, telefono: str = "",
+) -> list[dict]:
     """
     Monta o system prompt em dois blocos, para aproveitar o cache de prompt da
     Anthropic: a base de conhecimento (config/prompts.yaml, ~11 mil tokens,
@@ -437,7 +459,7 @@ async def montar_system_blocks(nome_contato: str | None, primeira_mensagem: bool
     """
     config = cargar_config_prompts()
     base = config.get("system_prompt", "Eres un asistente útil. Responde en español.")
-    contexto_agenda = await obtener_contexto_agenda()
+    contexto_agenda = await obtener_contexto_agenda(telefono)
     contexto_cliente = obtener_contexto_cliente(nome_contato, primeira_mensagem)
     contexto_dinamico = obtener_contexto_temporal() + contexto_cliente + contexto_agenda
     return [
@@ -488,7 +510,11 @@ async def _processar_agendamento(entrada: dict, telefono: str) -> tuple[str, dic
         )
 
     data_hora_tz = data_hora.replace(tzinfo=ZoneInfo("Europe/Lisbon"))
-    reserva = await criar_reserva(data_hora_tz, nome, telefone=telefono, informacao=informacao)
+    sem_restricoes = bool(NUMERO_CONSULTOR) and telefono == NUMERO_CONSULTOR
+    reserva = await criar_reserva(
+        data_hora_tz, nome, telefone=telefono, informacao=informacao,
+        sem_restricoes=sem_restricoes,
+    )
     if reserva is None:
         return (
             "Não foi possível marcar: esse horário pode já não estar livre, ou "
@@ -639,7 +665,7 @@ async def generar_respuesta(
     if not mensaje or len(mensaje.strip()) < 2:
         return obtener_mensaje_fallback(), False, None, None, None, None, None
 
-    system_blocks = await montar_system_blocks(nome_contato, primeira_mensagem=not historial)
+    system_blocks = await montar_system_blocks(nome_contato, primeira_mensagem=not historial, telefono=telefono)
 
     # Construir mensajes para la API — "humano" (respuestas manuales desde /admin)
     # se envía como "assistant", Claude solo conoce esos dos roles
