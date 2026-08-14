@@ -15,7 +15,10 @@ from anthropic import AsyncAnthropic
 from dotenv import load_dotenv
 
 from agent.agenda import formatar_slot
-from agent.cal_com import obter_horarios_disponiveis, criar_reserva, cancelar_reserva, calcom_configurado
+from agent.cal_com import (
+    obter_horarios_disponiveis, obter_horarios_disponiveis_intervalo,
+    criar_reserva, cancelar_reserva, calcom_configurado,
+)
 from agent.memory import (
     criar_agendamento, guardar_evento_calcom_uid,
     obter_agendamento_ativo_por_telefone, cancelar_agendamento, criar_alerta,
@@ -148,6 +151,28 @@ HERRAMIENTAS = [
                 },
             },
             "required": [],
+        },
+    },
+    {
+        "name": "consultar_disponibilidade_dia",
+        "description": (
+            "Usa esta ferramenta para veres os horários realmente livres num "
+            "dia específico pedido pelo cliente — sobretudo quando esse dia "
+            "não está entre os já sugeridos no contexto (ex: uma data mais "
+            "distante no futuro, daqui a semanas ou meses). Não há limite de "
+            "distância — o cliente pode marcar para qualquer data futura. "
+            "Nunca inventes horários para um dia sem consultares primeiro "
+            "esta ferramenta para esse dia exato."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "string",
+                    "description": "Data a consultar, no formato AAAA-MM-DD.",
+                },
+            },
+            "required": ["data"],
         },
     },
     {
@@ -341,22 +366,28 @@ async def obtener_contexto_agenda() -> str:
         "interesse real no serviço (ex: já perguntou sobre uma solução "
         "específica, quer avançar, ou pede para falar com alguém).\n"
         "Os próximos dias com disponibilidade real, e as horas livres em "
-        "cada um, são:\n"
+        "cada um, são (só como sugestões rápidas — ver nota abaixo sobre "
+        "datas mais distantes):\n"
         f"{bloco_dias}\n\n"
         "Para agendar, segue SEMPRE este processo em dois passos separados, "
         "usando a ferramenta oferecer_opcoes em cada um (nunca escrevas dias "
         "ou horas em texto normal, para o cliente não ter de os escrever à mão):\n"
-        "1. Pergunta primeiro que DIA prefere, oferecendo 2 ou 3 dos dias "
-        "acima como botões (ex: 'Quinta-feira, 14/08').\n"
+        "1. Pergunta primeiro que DIA prefere. Se ele não pedir uma data "
+        "concreta, oferece 2 ou 3 dos dias acima como botões (ex: "
+        "'Quinta-feira, 14/08').\n"
         "2. Só depois de escolher o dia, pergunta a que HORA, oferecendo 2 "
         "ou 3 horários livres desse dia específico como botões (ex: '15h00').\n"
         "Nunca ofereças dia e hora ao mesmo tempo numa única pergunta, e "
         "nunca misturas horários de dias diferentes na mesma lista de botões. "
         "Depois de o cliente escolher o dia e a hora, confirma o nome dele "
         "e o motivo da chamada, e só depois usa a ferramenta "
-        "agendar_chamada para a marcar. Só sugere dias/horas desta lista — "
-        "se o cliente pedir algo fora dela, explica que não está disponível "
-        "e apresenta de novo as opções livres."
+        "agendar_chamada para a marcar.\n\n"
+        "Não há limite de distância no futuro — o cliente pode marcar para "
+        "qualquer data, mesmo daqui a semanas ou meses. Se ele pedir uma "
+        "data específica que não está na lista acima, usa SEMPRE a "
+        "ferramenta consultar_disponibilidade_dia para esse dia exato antes "
+        "de responderes — nunca inventes horários nem digas que não está "
+        "disponível sem teres consultado primeiro essa data real."
     )
 
 
@@ -529,6 +560,50 @@ async def _processar_cancelamento(telefone: str, motivo: str) -> str:
     )
 
 
+async def _processar_consulta_dia(entrada: dict) -> str:
+    """
+    Consulta os horários livres num dia específico pedido pelo cliente, vinda
+    da ferramenta consultar_disponibilidade_dia — sem limite de distância no
+    futuro.
+
+    Returns:
+        Mensagem para o modelo com as horas livres (ou aviso), a usar depois
+        com oferecer_opcoes.
+    """
+    data_str = (entrada.get("data") or "").strip()
+    try:
+        dia = datetime.strptime(data_str, "%Y-%m-%d").date()
+    except ValueError:
+        return (
+            "Data inválida (tem de estar no formato AAAA-MM-DD). Confirma a "
+            "data com o cliente e tenta de novo."
+        )
+
+    if not calcom_configurado():
+        return "O agendamento está temporariamente indisponível — informa o cliente."
+
+    hoje = datetime.now(ZoneInfo("Europe/Lisbon")).date()
+    if dia < hoje:
+        return "Essa data já passou. Pede ao cliente uma data futura."
+
+    horarios = await obter_horarios_disponiveis_intervalo(dia, dia)
+    nome_dia = DIAS_SEMANA[dia.weekday()]
+    data_formatada = f"{nome_dia}, {dia.strftime('%d/%m')}"
+
+    if not horarios:
+        return (
+            f"Não há horários livres em {data_formatada}. Sugere ao cliente "
+            "escolher outro dia."
+        )
+
+    horas = ", ".join(h.strftime("%Hh%M") for h in horarios)
+    return (
+        f"Horas livres em {data_formatada}: {horas}. Usa a ferramenta "
+        "oferecer_opcoes para apresentares 2 ou 3 destas horas como botões — "
+        "nunca escrevas os horários em texto normal."
+    )
+
+
 async def generar_respuesta(
     mensaje: str, historial: list[dict], telefono: str, nome_contato: str | None = None
 ) -> tuple[str, bool, dict | None, list[str] | None, dict | None, str | None, list[dict] | None]:
@@ -617,6 +692,8 @@ async def generar_respuesta(
                 elif tool_use.name == "cancelar_chamada":
                     motivo_cancelamento = (tool_use.input.get("motivo") or "").strip()
                     resultado_texto = await _processar_cancelamento(telefono, motivo_cancelamento)
+                elif tool_use.name == "consultar_disponibilidade_dia":
+                    resultado_texto = await _processar_consulta_dia(tool_use.input)
                 elif tool_use.name == "oferecer_opcoes":
                     pergunta = (tool_use.input.get("pergunta") or "").strip()
                     opcoes_validas = [

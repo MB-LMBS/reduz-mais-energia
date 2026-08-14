@@ -59,12 +59,24 @@ async def obter_horarios_disponiveis(dias_a_frente: int = 7) -> list[datetime]:
     Consulta os horários livres no Cal.com para os próximos N dias.
     Retorna uma lista de datetimes (hora de Portugal, timezone-aware).
     """
-    if not calcom_configurado():
-        return []
-
     agora = datetime.now(FUSO)
     inicio = agora.date()
     fim = inicio + timedelta(days=dias_a_frente)
+    return await obter_horarios_disponiveis_intervalo(inicio, fim)
+
+
+async def obter_horarios_disponiveis_intervalo(inicio, fim) -> list[datetime]:
+    """
+    Consulta os horários livres no Cal.com entre duas datas (inclusive) —
+    sem limite de distância no futuro, o Cal.com não impõe um tecto. Usa-se
+    tanto para o intervalo próximo por omissão como para um dia específico
+    pedido pelo cliente, mesmo que seja daqui a meses.
+    Retorna uma lista de datetimes (hora de Portugal, timezone-aware).
+    """
+    if not calcom_configurado():
+        return []
+    if fim < inicio:
+        return []
 
     async with httpx.AsyncClient(timeout=30) as client:
         r = await client.get(
