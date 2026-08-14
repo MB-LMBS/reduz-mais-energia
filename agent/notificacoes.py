@@ -150,27 +150,36 @@ def _titulo_notificacao(agendamento: dict) -> str:
     return "Chamada agendada"
 
 
+# Desativado a 14/08/2026: 5 tentativas de template (v1 a v5, variando
+# categoria, número de variáveis e conteúdo) foram todas rejeitadas pela
+# Meta com o mesmo motivo (INVALID_FORMAT) — mesmo a versão mais simples
+# possível (uma única variável curta, sem texto livre). A causa pode ser
+# específica desta conta/WABA, não só o texto. Decisão do Luis: desistir
+# por agora em vez de continuar a tentar variações. Para retomar mais
+# tarde, contactar o suporte da Meta com o histórico de rejeições, ou
+# tentar de novo a partir daqui.
+CONVITE_CONVIDADOS_ATIVO = False
+
+
 async def notificar_convidados(
     proveedor, convidados: list[str], descricao: str, data_str: str, hora_str: str, nota: str = "",
 ) -> int:
     """
     Avisa cada convidado por WhatsApp de um compromisso da agenda pessoal do
-    consultor, via template pré-aprovado (convite_reuniao_convidado_v4,
-    categoria UTILITY) — necessário para o negócio iniciar a conversa fora
-    da janela de 24h. Sem campo de texto livre: as 3 tentativas anteriores
-    (com uma variável para uma nota arbitrária) foram todas rejeitadas pela
-    Meta — a causa provável é que a Meta bloqueia templates com variáveis
-    que aceitem texto não revisto, mesmo quando pequenas. `nota` é ignorada
-    aqui de propósito (mantida no parâmetro só para não partir quem chama
-    esta função) — a nota pessoal do Luis fica só na descrição do evento,
-    nunca é reenviada ao convidado. Retorna quantos convites foram enviados
-    com sucesso.
+    consultor, via template pré-aprovado — necessário para o negócio
+    iniciar a conversa fora da janela de 24h. Ver CONVITE_CONVIDADOS_ATIVO
+    acima: atualmente desativado (nenhum template passou na revisão da
+    Meta). `nota` fica só na descrição do evento, nunca é reenviada ao
+    convidado. Retorna quantos convites foram enviados com sucesso.
     """
+    if not CONVITE_CONVIDADOS_ATIVO:
+        return 0
+
     quando = f"{data_str} às {hora_str}"
     sucesso = 0
     for numero in convidados:
         ok = await proveedor.enviar_template(
-            numero, "convite_reuniao_convidado_v4", [descricao, quando],
+            numero, "convite_reuniao_convidado_v5", [f"{descricao}, {quando}"],
         )
         if ok:
             sucesso += 1
