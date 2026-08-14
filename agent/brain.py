@@ -19,6 +19,7 @@ from agent.cal_com import obter_horarios_disponiveis, criar_reserva, cancelar_re
 from agent.memory import (
     criar_agendamento, guardar_evento_calcom_uid,
     obter_agendamento_ativo_por_telefone, cancelar_agendamento, criar_alerta,
+    marcar_alertas_agendamento_vistos,
 )
 from agent.calendario import apagar_evento_chamada as apagar_evento_icloud
 from agent.outlook_calendar import apagar_evento_chamada as apagar_evento_outlook
@@ -506,6 +507,8 @@ async def _processar_cancelamento(telefone: str, motivo: str) -> str:
         await cancelar_reserva(cancelado["evento_calcom_uid"], motivo or "Cancelado pelo cliente via WhatsApp")
     await apagar_evento_icloud(agendamento["id"])
     await apagar_evento_outlook(cancelado.get("evento_outlook_id"))
+
+    await marcar_alertas_agendamento_vistos(telefone)
 
     proveedor = obtener_proveedor()
     await notificar_cancelamento(proveedor, cancelado, motivo)

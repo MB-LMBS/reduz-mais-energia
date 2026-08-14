@@ -30,6 +30,7 @@ from agent.memory import (
     editar_mensagem, apagar_mensagem, obter_mensagem, obtener_mensagens_novas,
     listar_alertas_nao_vistos, marcar_alerta_visto, marcar_todos_alertas_vistos,
     cancelar_agendamento, limpiar_historial, listar_mensagens_apagadas, restaurar_mensagem,
+    marcar_alertas_agendamento_vistos,
 )
 from agent.agenda import formatar_slot
 from agent.providers import obtener_proveedor
@@ -484,6 +485,7 @@ def _render_agenda_widget(agendamentos: list[dict], limite: int = 5) -> str:
           <a class="nome" href="/admin/conversa/{telefone}">{nome}</a>
           <form method="post" action="/admin/agenda/{a['id']}/cancelar"
                 onsubmit="return confirm('Cancelar esta chamada? Também será removida do Cal.com.')">
+            <input type="hidden" name="voltar" value="/admin/">
             <button type="submit" class="btn-cancelar-mini">Cancelar</button>
           </form>
         </div>
@@ -740,7 +742,9 @@ async def outlook_callback(code: str | None = None, error: str | None = None, au
 
 
 @router.post("/agenda/{agendamento_id}/cancelar")
-async def cancelar_chamada(agendamento_id: int, auth: bool = Depends(verificar_password)):
+async def cancelar_chamada(
+    agendamento_id: int, voltar: str = Form("/admin/agenda"), auth: bool = Depends(verificar_password),
+):
     """Cancela uma chamada agendada e remove a reserva correspondente no Cal.com (e iCloud/Outlook, se ligados)."""
     cancelado = await cancelar_agendamento(agendamento_id)
     if cancelado:
@@ -748,8 +752,9 @@ async def cancelar_chamada(agendamento_id: int, auth: bool = Depends(verificar_p
         await apagar_evento_outlook(cancelado.get("evento_outlook_id"))
         if cancelado.get("evento_calcom_uid"):
             await cancelar_reserva_calcom(cancelado["evento_calcom_uid"], "Cancelado pelo consultor")
+        await marcar_alertas_agendamento_vistos(cancelado["telefono"])
         logger.info(f"Chamada cancelada: agendamento {agendamento_id}")
-    return RedirectResponse(url="/admin/agenda", status_code=303)
+    return RedirectResponse(url=voltar if voltar.startswith("/admin/") else "/admin/agenda", status_code=303)
 
 
 def _formatar_hora(timestamp: datetime | None) -> str:

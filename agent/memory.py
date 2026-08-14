@@ -572,6 +572,25 @@ async def marcar_todos_alertas_vistos():
         await session.commit()
 
 
+async def marcar_alertas_agendamento_vistos(telefone: str):
+    """
+    Marca como vistos os alertas de agendamento/lembrete pendentes de um
+    telefone — usado quando uma chamada é cancelada, para não deixar no
+    painel um alerta "chamada agendada" desatualizado ao lado do novo
+    alerta de cancelamento.
+    """
+    async with async_session() as session:
+        query = select(Alerta).where(
+            Alerta.visto == False,
+            Alerta.telefono == telefone,
+            Alerta.tipo.in_(["agendamento", "lembrete"]),
+        )
+        result = await session.execute(query)
+        for alerta in result.scalars().all():
+            alerta.visto = True
+        await session.commit()
+
+
 async def limpiar_historial(telefono: str):
     """Move todo o histórico de uma conversa para a lixeira (recuperável 30 dias)."""
     async with async_session() as session:
