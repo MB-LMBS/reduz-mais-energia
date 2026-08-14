@@ -6,20 +6,28 @@ Envia mensagens de motivação e espírito de equipa aos consultores/comerciais,
 Segunda a Sexta, de manhã e ao final do dia (com destaque à sexta-feira para
 o fim de semana). Usa templates pré-aprovados do WhatsApp — necessários para
 o negócio poder iniciar a conversa fora da janela de 24h — em vez de texto
-gerado ao vivo pela IA, que a Meta não aprova em templates.
+gerado ao vivo pela IA, que a Meta não aprova em templates com uma variável
+em aberto.
 
-As mensagens são escolhidas de uma reserva escrita antecipadamente, sem
-repetir até esgotar, para continuar a parecer uma mensagem diferente a cada
-dia. O estado de rotação fica guardado em config_app (obter_config/definir_config).
+A reserva de templates é consultada diretamente na Meta (só os já aprovados
+entram em rotação) — quando um ciclo completo se esgota, o sistema gera e
+submete sozinho um novo lote à revisão, para nunca precisar de intervenção
+manual. O estado de rotação fica guardado em config_app.
 """
 
 import json
 import logging
+import os
 from datetime import date
 
+from anthropic import AsyncAnthropic
+
 from agent.memory import obter_config, definir_config
+from agent.meta_templates import listar_templates_aprovados, proximo_indice_livre, criar_template
 
 logger = logging.getLogger("agentkit")
+
+client = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
 # Comerciais/consultores que recebem as mensagens diárias
 CONSULTORES = [
@@ -29,11 +37,22 @@ CONSULTORES = [
     {"nome": "Paula Garcia", "telefone": "351969853140"},
 ]
 
-# Nomes dos templates aprovados na Meta (ver scratchpad/setup_pool_templates.py
-# para o texto exato de cada um) — {{1}} em cada um é o primeiro nome
-TEMPLATES_MANHA = [f"mensagem_manha_{i:02d}" for i in range(1, 13)]
-TEMPLATES_FIM_DIA = [f"mensagem_fimdia_{i:02d}" for i in range(1, 11)]
-TEMPLATES_SEXTA = [f"mensagem_sexta_{i:02d}" for i in range(1, 7)]
+PREFIXOS = {"manha": "mensagem_manha_", "fim_dia": "mensagem_fimdia_", "sexta": "mensagem_sexta_"}
+
+# Reserva de segurança, usada só se a consulta à Meta falhar (ex: API em baixo)
+POOL_RESERVA = {
+    "manha": [f"mensagem_manha_{i:02d}" for i in range(1, 13)],
+    "fim_dia": [f"mensagem_fimdia_{i:02d}" for i in range(1, 11)],
+    "sexta": [f"mensagem_sexta_{i:02d}" for i in range(1, 7)],
+}
+
+NOVAS_MENSAGENS_POR_LOTE = 4
+
+DESCRICAO_TIPO = {
+    "manha": "mensagem de início de dia, Segunda a Sexta — motivação e espírito de equipa para começar bem o dia",
+    "fim_dia": "mensagem de fecho de dia, Segunda a Quinta — reconhecimento e agradecimento pelo esforço do dia",
+    "sexta": "mensagem de fecho de semana, sexta-feira ao final do dia — reconhecimento da semana e incentivo a aproveitar o fim de semana",
+}
 
 CHAVE_ESTADO = "motivacao_estado"
 
@@ -56,32 +75,82 @@ def _primeiro_nome(nome_completo: str) -> str:
     return nome_completo.split(" ")[0]
 
 
+async def _obter_pool(tipo: str) -> list[str]:
+    prefixo = PREFIXOS[tipo]
+    nomes = await listar_templates_aprovados(prefixo)
+    return nomes or POOL_RESERVA[tipo]
+
+
+async def _gerar_e_submeter_novo_lote(tipo: str):
+    """
+    Chamado quando um ciclo completo de mensagens se esgota — pede à IA um
+    novo lote e submete-o à Meta para aprovação, para a reserva nunca
+    esgotar de vez sem intervenção manual.
+    """
+    try:
+        prompt = (
+            f"Escreve {NOVAS_MENSAGENS_POR_LOTE} mensagens curtas de WhatsApp em português de "
+            "Portugal, para consultores comerciais de energia de uma equipa que está a começar "
+            f"agora a carreira. Tipo: {DESCRICAO_TIPO[tipo]}.\n\n"
+            "Regras obrigatórias:\n"
+            "- Cada mensagem tem de incluir literalmente o texto {{1}} no lugar do primeiro nome "
+            "da pessoa — nunca no início nem no fim da mensagem, sempre rodeado de texto fixo "
+            "(ex: 'Bom dia, {{1}}!' ou 'Boa noite, {{1}},').\n"
+            "- Usa sempre o nome da pessoa de forma natural, é um detalhe importante.\n"
+            "- PROIBIDO mencionar resultados fracos, vendas baixas, metas por cumprir ou "
+            "comparações — a equipa está a começar e isso feriria o esforço inicial deles.\n"
+            "- Foca sempre em esforço, resiliência, aprendizagem e espírito de equipa.\n"
+            "- Podes usar um emoji relevante por mensagem.\n"
+            "- Entre 100 e 280 caracteres cada.\n"
+            "- Cada mensagem diferente das outras, sem se repetirem em estrutura.\n\n"
+            "Devolve só as mensagens, uma por linha, sem numeração nem comentários."
+        )
+        response = await client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=800,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        texto = response.content[0].text
+        linhas = [l.strip() for l in texto.strip().split("\n") if l.strip() and "{{1}}" in l]
+
+        if not linhas:
+            logger.warning(f"Geração de novas mensagens ({tipo}) não devolveu linhas válidas")
+            return
+
+        prefixo = PREFIXOS[tipo]
+        proximo = await proximo_indice_livre(prefixo)
+        for i, corpo in enumerate(linhas[:NOVAS_MENSAGENS_POR_LOTE]):
+            nome_template = f"{prefixo}{proximo + i:02d}"
+            await criar_template(nome_template, corpo)
+
+        logger.info(f"Novo lote de mensagens ({tipo}) submetido à Meta: {len(linhas)} mensagens")
+    except Exception as e:
+        logger.error(f"Erro ao gerar/submeter novo lote de mensagens ({tipo}): {e}")
+
+
 async def enviar_mensagens_periodo(proveedor, periodo: str) -> int:
     """
     periodo: "manha" ou "fim_dia". Cada consultor recebe uma mensagem
     diferente da reserva (nunca o mesmo texto entre si no mesmo dia) — o
     índice de cada um é o ciclo do dia desviado pela sua posição na lista,
-    por isso também nunca repete de um dia para o outro. Idempotente por
-    dia — se já disparou hoje neste período, não reenvia.
+    por isso também nunca repete de um dia para o outro. Quando o ciclo dá
+    a volta completa, dispara a geração de um novo lote em segundo plano.
+    Idempotente por dia — se já disparou hoje neste período, não reenvia.
     Retorna o número de envios bem-sucedidos.
     """
     hoje = date.today()
     sexta = hoje.weekday() == 4  # 0=segunda ... 4=sexta
+    tipo = "sexta" if (periodo == "fim_dia" and sexta) else periodo
 
-    if periodo == "manha":
-        pool = TEMPLATES_MANHA
-        chave_ciclo = "ciclo_manha"
-        chave_data = "data_manha"
-    else:
-        pool = TEMPLATES_SEXTA if sexta else TEMPLATES_FIM_DIA
-        chave_ciclo = "ciclo_sexta" if sexta else "ciclo_fimdia"
-        chave_data = "data_fim_dia"
+    chave_ciclo = f"ciclo_{tipo}"
+    chave_data = "data_manha" if periodo == "manha" else "data_fim_dia"
 
     estado = await _obter_estado()
     if estado.get(chave_data) == hoje.isoformat():
         return 0
 
-    ciclo = estado.get(chave_ciclo, 0)
+    pool = await _obter_pool(tipo)
+    ciclo = estado.get(chave_ciclo, 0) % len(pool)
 
     sucesso = 0
     for posicao, consultor in enumerate(CONSULTORES):
@@ -96,7 +165,8 @@ async def enviar_mensagens_periodo(proveedor, periodo: str) -> int:
                 f"Falha ao enviar {template} a {consultor['nome']} ({consultor['telefone']})"
             )
 
-    estado[chave_ciclo] = (ciclo + 1) % len(pool)
+    novo_ciclo = (ciclo + 1) % len(pool)
+    estado[chave_ciclo] = novo_ciclo
     estado[chave_data] = hoje.isoformat()
     await _guardar_estado(estado)
 
@@ -104,4 +174,8 @@ async def enviar_mensagens_periodo(proveedor, periodo: str) -> int:
         f"Mensagens de motivação ({periodo}, ciclo {ciclo}): "
         f"{sucesso}/{len(CONSULTORES)} enviadas, cada uma com template diferente"
     )
+
+    if novo_ciclo == 0:
+        await _gerar_e_submeter_novo_lote(tipo)
+
     return sucesso
