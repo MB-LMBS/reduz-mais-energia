@@ -21,7 +21,7 @@ from zoneinfo import ZoneInfo
 from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, HTTPException, Form, File, UploadFile
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
-from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, PlainTextResponse
 
 from agent.memory import (
     listar_conversaciones, obtener_historial, obtener_modo, establecer_modo,
@@ -30,7 +30,7 @@ from agent.memory import (
     editar_mensagem, apagar_mensagem, obter_mensagem, obtener_mensagens_novas,
     listar_alertas_nao_vistos, marcar_alerta_visto, marcar_todos_alertas_vistos,
     cancelar_agendamento, limpiar_historial, listar_mensagens_apagadas, restaurar_mensagem,
-    marcar_alertas_agendamento_vistos,
+    marcar_alertas_agendamento_vistos, obter_config, definir_config,
 )
 from agent.agenda import formatar_slot
 from agent.providers import obtener_proveedor
@@ -609,6 +609,20 @@ async def dispensar_todos_alertas(auth: bool = Depends(verificar_password)):
     """Marca todos os alertas pendentes como vistos."""
     await marcar_todos_alertas_vistos()
     return RedirectResponse(url="/admin/", status_code=303)
+
+
+@router.get("/debug/motivacao", response_class=PlainTextResponse)
+async def debug_ver_estado_motivacao(auth: bool = Depends(verificar_password)):
+    """Rota de diagnóstico temporária — mostra o estado guardado da rotação de mensagens de motivação."""
+    return await obter_config("motivacao_estado") or "(vazio)"
+
+
+@router.post("/debug/motivacao/limpar", response_class=PlainTextResponse)
+async def debug_limpar_estado_motivacao(auth: bool = Depends(verificar_password)):
+    """Rota de diagnóstico temporária — limpa o estado, permitindo novo disparo na próxima janela."""
+    anterior = await obter_config("motivacao_estado") or "(vazio)"
+    await definir_config("motivacao_estado", "{}")
+    return f"Estado anterior: {anterior}\nLimpo."
 
 
 @router.get("/agenda", response_class=HTMLResponse)
