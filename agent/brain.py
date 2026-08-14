@@ -466,7 +466,7 @@ async def _processar_agendamento(entrada: dict, telefono: str) -> tuple[str, dic
             await guardar_evento_calcom_uid(agendamento_id, uid)
         # Reforço direto ao iCloud — o Cal.com nem sempre escreve no calendário
         # externo ligado quando a marcação é criada pela API (bug conhecido deles)
-        await criar_evento_icloud(agendamento_id, nome or None, telefone, data_hora, informacao)
+        await criar_evento_icloud(agendamento_id, nome or None, telefono, data_hora, informacao)
 
     dados = {
         "id": agendamento_id,
