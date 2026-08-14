@@ -120,8 +120,8 @@ async def loop_lembretes():
 async def loop_motivacao():
     """
     Envia as mensagens diárias de motivação à equipa comercial — Segunda a
-    Sexta, às 08:00 (manhã) e às 18:30 (fim de dia, com destaque à sexta).
-    A janela de 10 minutos evita perder o disparo se o servidor reiniciar
+    Sexta, às 08:00 (manhã) e às 19:30 (fim de dia, com destaque à sexta).
+    A janela de 15 minutos evita perder o disparo se o servidor reiniciar
     perto da hora certa; enviar_mensagens_periodo garante que não repete no
     mesmo dia mesmo que o ciclo passe várias vezes pela mesma janela.
     """
@@ -130,9 +130,9 @@ async def loop_motivacao():
             agora = datetime.now(ZoneInfo("Europe/Lisbon"))
             if agora.weekday() < 5:  # 0=segunda ... 4=sexta
                 hora_atual = agora.time()
-                if time(8, 0) <= hora_atual < time(8, 10):
+                if time(8, 0) <= hora_atual < time(8, 15):
                     await enviar_mensagens_periodo(proveedor, "manha")
-                elif time(18, 30) <= hora_atual < time(18, 40):
+                elif time(19, 30) <= hora_atual < time(19, 45):
                     await enviar_mensagens_periodo(proveedor, "fim_dia")
         except Exception as e:
             logger.error(f"Error en loop_motivacao: {e}")
