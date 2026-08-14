@@ -109,7 +109,7 @@ async def obter_horarios_disponiveis_intervalo(inicio, fim) -> list[datetime]:
 
 async def criar_reserva(
     inicio: datetime, nome_cliente: str, telefone: str, informacao: str = "",
-    sem_restricoes: bool = False,
+    sem_restricoes: bool = False, duracao_minutos: int | None = None,
 ) -> dict | None:
     """
     Cria uma marcação real no Cal.com. `inicio` deve ser timezone-aware.
@@ -144,6 +144,10 @@ async def criar_reserva(
         corpo["allowBookingOutOfBounds"] = True
         corpo["skipBookingLimits"] = True
         corpo["allowConflicts"] = True
+    # duracao_minutos não é enviada ao Cal.com: o event type partilhado com os
+    # clientes tem duração fixa (15 min) e não aceita "lengthInMinutes" sem
+    # estar configurado com múltiplas durações — aplica-se só no iCloud, que é
+    # o calendário que o consultor realmente usa no dia a dia
 
     async with httpx.AsyncClient(timeout=30) as client:
         r = await client.post(f"{BASE_URL}/v2/bookings", headers=_headers("2026-02-25"), json=corpo)

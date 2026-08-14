@@ -103,7 +103,11 @@ HERRAMIENTAS = [
             "depois de o cliente escolher um dos horários disponíveis que lhe foram "
             "sugeridos (secção 'Agendamento de chamadas' abaixo). Só uses esta "
             "ferramenta depois de confirmares com o cliente o horário exato, o nome "
-            "dele e o motivo da chamada — nunca marques sem essa confirmação."
+            "dele e o motivo da chamada — nunca marques sem essa confirmação. "
+            "Na agenda pessoal do consultor (ver secção 'esta é a SUA agenda "
+            "pessoal', se aplicável) serve para qualquer tipo de compromisso, não "
+            "só chamadas — usa também os campos tipo_evento, formato, "
+            "duracao_minutos e convidados nesse caso."
         ),
         "input_schema": {
             "type": "object",
@@ -126,6 +130,37 @@ HERRAMIENTAS = [
                         "Resumo do que o cliente quer discutir na chamada — situação "
                         "atual, o que procura, e qualquer outro dado relevante que "
                         "tenha partilhado na conversa."
+                    ),
+                },
+                "tipo_evento": {
+                    "type": "string",
+                    "enum": ["pessoal", "profissional"],
+                    "description": (
+                        "Só para a agenda pessoal do consultor (nunca para clientes): "
+                        "se o compromisso é pessoal ou profissional."
+                    ),
+                },
+                "formato": {
+                    "type": "string",
+                    "enum": ["presencial", "telefonica", "teams", "deslocacao", "recordatorio"],
+                    "description": (
+                        "Só para a agenda pessoal do consultor (nunca para clientes): "
+                        "o formato do compromisso."
+                    ),
+                },
+                "duracao_minutos": {
+                    "type": "integer",
+                    "description": (
+                        "Só para a agenda pessoal do consultor (nunca para clientes): "
+                        "duração estimada do compromisso, em minutos."
+                    ),
+                },
+                "convidados": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": (
+                        "Só para a agenda pessoal do consultor (nunca para clientes): "
+                        "números de telefone de outras pessoas a convocar, se houver."
                     ),
                 },
             },
@@ -343,17 +378,30 @@ async def obtener_contexto_agenda(telefono: str = "") -> str:
         return (
             "\n\n## Agendamento — esta é a SUA agenda pessoal\n"
             "Está a falar com o próprio consultor (Luis Sequeira), na conversa "
-            "que ele usa como a sua agenda pessoal — não é um cliente. Aqui não "
-            "há restrições nenhumas: pode pedir para marcar QUALQUER dia e "
-            "hora (mesmo fora de Segunda-Sábado 15h-19h, ou com pouca "
-            "antecedência), e o texto/descrição pode ser sobre o que ele "
-            "quiser (não precisa de ser sobre um cliente ou proposta). Não "
-            "perguntes o \"motivo da chamada\" como se fosse um cliente — usa "
-            "a descrição que ele der, ou deixa em branco se ele não indicar "
-            "nada. Interpreta a data/hora que ele pedir (mesmo relativa, tipo "
-            "\"amanhã às 8\") e usa a ferramenta agendar_chamada diretamente "
-            "com essa data/hora — não precisas de consultar disponibilidade "
-            "nem de sugerir horários de uma lista."
+            "que ele usa como a sua agenda pessoal — não é um cliente, e nem "
+            "todos os compromissos são chamadas telefónicas. Aqui não há "
+            "restrições de dia/hora nenhumas: pode pedir para marcar QUALQUER "
+            "dia e hora (mesmo fora de Segunda-Sábado 15h-19h, ou com pouca "
+            "antecedência), e o assunto pode ser sobre o que ele quiser (não "
+            "precisa de ser sobre um cliente ou proposta). Interpreta a "
+            "data/hora que ele pedir, mesmo relativa (ex: \"amanhã às 8\").\n\n"
+            "Antes de chamares agendar_chamada, confirma sempre estes 4 "
+            "detalhes com botões (ferramenta oferecer_opcoes, máx. 3 opções "
+            "por pergunta — se precisares de mais que 3, faz 2 perguntas "
+            "seguidas em vez de uma):\n"
+            "1. Pessoal ou Profissional? (2 botões)\n"
+            "2. Formato: Presencial, Telefónica ou Teams — se nenhum servir, "
+            "faz uma segunda pergunta com Deslocação ou Recordatório.\n"
+            "3. Duração estimada — sugere botões rápidos tipo \"15 min\", "
+            "\"30 min\", \"1 hora\", e aceita que ele escreva outro valor em "
+            "texto livre se quiser.\n"
+            "4. Pergunta se quer convidar mais alguém (sim/não em botões); se "
+            "sim, pede o(s) número(s) de telefone em texto livre (pode ser "
+            "mais que um).\n"
+            "Só depois de teres estes 4 detalhes (mesmo que resumidos) chamas "
+            "agendar_chamada com tudo preenchido — não precisas de consultar "
+            "disponibilidade nem de sugerir horários de uma lista, a agenda "
+            "dele está sempre livre para isto."
         )
 
     if not calcom_configurado():
@@ -493,6 +541,34 @@ async def _processar_agendamento(entrada: dict, telefono: str) -> tuple[str, dic
     nome = (entrada.get("nome") or "").strip()
     informacao = (entrada.get("informacao") or "").strip()
 
+    e_agenda_pessoal = bool(NUMERO_CONSULTOR) and telefono == NUMERO_CONSULTOR
+    tipo_evento = (entrada.get("tipo_evento") or "").strip()
+    formato = (entrada.get("formato") or "").strip()
+    duracao_minutos = entrada.get("duracao_minutos")
+    convidados = [str(c).strip() for c in (entrada.get("convidados") or []) if str(c).strip()]
+
+    titulo_evento = None
+    if e_agenda_pessoal:
+        rotulos_formato = {
+            "presencial": "Presencial", "telefonica": "Telefónica", "teams": "Teams",
+            "deslocacao": "Deslocação", "recordatorio": "Recordatório",
+        }
+        partes_titulo = [p for p in (tipo_evento.capitalize(), rotulos_formato.get(formato)) if p]
+        titulo_evento = " — ".join(partes_titulo) or None
+        if titulo_evento and nome:
+            titulo_evento = f"{titulo_evento}: {nome}"
+
+        linhas_info = []
+        if tipo_evento:
+            linhas_info.append(f"Tipo: {tipo_evento.capitalize()}")
+        if formato:
+            linhas_info.append(f"Formato: {rotulos_formato.get(formato, formato)}")
+        if convidados:
+            linhas_info.append(f"Convidados: {', '.join(convidados)}")
+        if informacao:
+            linhas_info.append(informacao)
+        informacao = "\n".join(linhas_info)
+
     try:
         data_hora = datetime.strptime(f"{data} {hora}", "%Y-%m-%d %H:%M")
     except ValueError:
@@ -510,10 +586,9 @@ async def _processar_agendamento(entrada: dict, telefono: str) -> tuple[str, dic
         )
 
     data_hora_tz = data_hora.replace(tzinfo=ZoneInfo("Europe/Lisbon"))
-    sem_restricoes = bool(NUMERO_CONSULTOR) and telefono == NUMERO_CONSULTOR
     reserva = await criar_reserva(
         data_hora_tz, nome, telefone=telefono, informacao=informacao,
-        sem_restricoes=sem_restricoes,
+        sem_restricoes=e_agenda_pessoal, duracao_minutos=duracao_minutos,
     )
     if reserva is None:
         return (
@@ -530,7 +605,12 @@ async def _processar_agendamento(entrada: dict, telefono: str) -> tuple[str, dic
             await guardar_evento_calcom_uid(agendamento_id, uid)
         # Reforço direto ao iCloud — o Cal.com nem sempre escreve no calendário
         # externo ligado quando a marcação é criada pela API (bug conhecido deles)
-        await criar_evento_icloud(agendamento_id, nome or None, telefono, data_hora, informacao)
+        kwargs_icloud = {}
+        if duracao_minutos:
+            kwargs_icloud["duracao_minutos"] = duracao_minutos
+        if titulo_evento:
+            kwargs_icloud["titulo"] = titulo_evento
+        await criar_evento_icloud(agendamento_id, nome or None, telefono, data_hora, informacao, **kwargs_icloud)
 
     dados = {
         "id": agendamento_id,
@@ -540,7 +620,13 @@ async def _processar_agendamento(entrada: dict, telefono: str) -> tuple[str, dic
         "informacao": informacao,
         "evento_calcom_uid": reserva.get("uid"),
     }
-    logger.info(f"Chamada agendada (Cal.com uid={reserva.get('uid')}): {telefono} — {formatar_slot(data_hora)}")
+    logger.info(f"Agendado (Cal.com uid={reserva.get('uid')}): {telefono} - {formatar_slot(data_hora)}")
+    if e_agenda_pessoal:
+        return (
+            f"Compromisso marcado com sucesso para {formatar_slot(data_hora)}"
+            f"{f' ({titulo_evento})' if titulo_evento else ''}. Confirma isto ao Luis de forma clara.",
+            dados,
+        )
     return (
         f"Chamada marcada com sucesso para {formatar_slot(data_hora)}. "
         "Confirma isto ao cliente de forma clara e simpática.",

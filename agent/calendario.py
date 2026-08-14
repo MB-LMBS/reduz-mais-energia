@@ -53,7 +53,10 @@ def _obter_calendario():
     return calendarios[0]
 
 
-def _construir_ical(agendamento_id: int, nome_cliente, telefono: str, data_hora, informacao: str) -> bytes:
+def _construir_ical(
+    agendamento_id: int, nome_cliente, telefono: str, data_hora, informacao: str,
+    duracao_minutos: int = DURACAO_CHAMADA_MINUTOS, titulo: str | None = None,
+) -> bytes:
     data_hora_utc = data_hora.replace(tzinfo=ZoneInfo("Europe/Lisbon")).astimezone(ZoneInfo("UTC"))
 
     cal = ICalendar()
@@ -62,9 +65,9 @@ def _construir_ical(agendamento_id: int, nome_cliente, telefono: str, data_hora,
 
     evento = ICalEvent()
     evento.add("uid", _uid_evento(agendamento_id))
-    evento.add("summary", f"Chamada Reduz+ Energia — {nome_cliente or telefono}")
+    evento.add("summary", titulo or f"Chamada Reduz+ Energia — {nome_cliente or telefono}")
     evento.add("dtstart", data_hora_utc)
-    evento.add("dtend", data_hora_utc + timedelta(minutes=DURACAO_CHAMADA_MINUTOS))
+    evento.add("dtend", data_hora_utc + timedelta(minutes=duracao_minutos))
     evento.add("description", f"Telefone: {telefono}\n\n{informacao or ''}")
 
     alarme = Alarm()
@@ -77,19 +80,28 @@ def _construir_ical(agendamento_id: int, nome_cliente, telefono: str, data_hora,
     return cal.to_ical()
 
 
-def _criar_evento_sync(agendamento_id: int, nome_cliente, telefono: str, data_hora, informacao: str):
+def _criar_evento_sync(
+    agendamento_id: int, nome_cliente, telefono: str, data_hora, informacao: str,
+    duracao_minutos: int = DURACAO_CHAMADA_MINUTOS, titulo: str | None = None,
+):
     calendario = _obter_calendario()
-    ical = _construir_ical(agendamento_id, nome_cliente, telefono, data_hora, informacao)
+    ical = _construir_ical(agendamento_id, nome_cliente, telefono, data_hora, informacao, duracao_minutos, titulo)
     calendario.save_event(ical)
 
 
-async def criar_evento_chamada(agendamento_id: int, nome_cliente, telefono: str, data_hora, informacao: str) -> bool:
+async def criar_evento_chamada(
+    agendamento_id: int, nome_cliente, telefono: str, data_hora, informacao: str,
+    duracao_minutos: int = DURACAO_CHAMADA_MINUTOS, titulo: str | None = None,
+) -> bool:
     """Cria o evento no iCloud Calendar. Retorna True se teve sucesso."""
     if not icloud_configurado():
         logger.info("ICLOUD_EMAIL/ICLOUD_APP_PASSWORD não configurados — a saltar sincronização com iCloud")
         return False
     try:
-        await asyncio.to_thread(_criar_evento_sync, agendamento_id, nome_cliente, telefono, data_hora, informacao)
+        await asyncio.to_thread(
+            _criar_evento_sync, agendamento_id, nome_cliente, telefono, data_hora, informacao,
+            duracao_minutos, titulo,
+        )
         logger.info(f"Evento criado no iCloud Calendar para o agendamento {agendamento_id}")
         return True
     except Exception as e:
