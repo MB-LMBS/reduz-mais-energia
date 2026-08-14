@@ -11,7 +11,7 @@ import uuid
 import asyncio
 import mimetypes
 import logging
-from datetime import datetime
+from datetime import datetime, time
 from zoneinfo import ZoneInfo
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException
@@ -35,6 +35,7 @@ from agent.calendario import criar_evento_chamada as criar_evento_icloud
 from agent.outlook_calendar import criar_evento_chamada as criar_evento_outlook
 from agent.admin import router as admin_router, LOGO_URL
 from agent.formatacao_whatsapp import negrito_campos, extrair_links, rotulo_botao
+from agent.motivacao import enviar_mensagens_periodo
 
 load_dotenv()
 
@@ -116,6 +117,28 @@ async def loop_lembretes():
         await asyncio.sleep(INTERVALO_LEMBRETES)
 
 
+async def loop_motivacao():
+    """
+    Envia as mensagens diárias de motivação à equipa comercial — Segunda a
+    Sexta, às 08:00 (manhã) e às 18:30 (fim de dia, com destaque à sexta).
+    A janela de 10 minutos evita perder o disparo se o servidor reiniciar
+    perto da hora certa; enviar_mensagens_periodo garante que não repete no
+    mesmo dia mesmo que o ciclo passe várias vezes pela mesma janela.
+    """
+    while True:
+        try:
+            agora = datetime.now(ZoneInfo("Europe/Lisbon"))
+            if agora.weekday() < 5:  # 0=segunda ... 4=sexta
+                hora_atual = agora.time()
+                if time(8, 0) <= hora_atual < time(8, 10):
+                    await enviar_mensagens_periodo(proveedor, "manha")
+                elif time(18, 30) <= hora_atual < time(18, 40):
+                    await enviar_mensagens_periodo(proveedor, "fim_dia")
+        except Exception as e:
+            logger.error(f"Error en loop_motivacao: {e}")
+        await asyncio.sleep(INTERVALO_LEMBRETES)
+
+
 async def guardar_media_recibido(msg) -> str | None:
     """Descarga un archivo recibido y lo guarda localmente. Retorna la ruta relativa o None."""
     if not msg.media_id:
@@ -139,10 +162,12 @@ async def lifespan(app: FastAPI):
     await inicializar_db()
     logger.info("Base de datos inicializada")
     tarefa_lembretes = asyncio.create_task(loop_lembretes())
+    tarefa_motivacao = asyncio.create_task(loop_motivacao())
     logger.info(f"Servidor AgentKit corriendo en puerto {PORT}")
     logger.info(f"Proveedor de WhatsApp: {proveedor.__class__.__name__}")
     yield
     tarefa_lembretes.cancel()
+    tarefa_motivacao.cancel()
 
 
 app = FastAPI(

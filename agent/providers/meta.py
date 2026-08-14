@@ -218,6 +218,37 @@ class ProveedorMeta(ProveedorWhatsApp):
                 logger.error(f"Error Meta API (botão link): {r.status_code} — {r.text}")
             return r.status_code == 200
 
+    async def enviar_template(self, telefono: str, nome_template: str, parametros: list[str]) -> bool:
+        """Envía uma mensagem via template pré-aprovado (necessário fora da janela de 24h)."""
+        if not self.access_token or not self.phone_number_id:
+            logger.warning("META_ACCESS_TOKEN o META_PHONE_NUMBER_ID no configurados")
+            return False
+        url = f"https://graph.facebook.com/{self.api_version}/{self.phone_number_id}/messages"
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": telefono,
+            "type": "template",
+            "template": {
+                "name": nome_template,
+                "language": {"code": "pt_PT"},
+                "components": [
+                    {
+                        "type": "body",
+                        "parameters": [{"type": "text", "text": p} for p in parametros],
+                    }
+                ] if parametros else [],
+            },
+        }
+        async with httpx.AsyncClient(timeout=30) as client:
+            r = await client.post(url, json=payload, headers=headers)
+            if r.status_code != 200:
+                logger.error(f"Error Meta API (template {nome_template}): {r.status_code} — {r.text}")
+            return r.status_code == 200
+
     async def enviar_documento(
         self, telefono: str, ficheiro: bytes, nome_ficheiro: str,
         mime_type: str, legenda: str = ""

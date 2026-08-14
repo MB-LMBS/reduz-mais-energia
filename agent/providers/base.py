@@ -78,3 +78,12 @@ class ProveedorWhatsApp(ABC):
     async def validar_webhook(self, request: Request) -> dict | int | None:
         """Verificación GET del webhook (solo Meta la requiere). Retorna respuesta o None."""
         return None
+
+    async def enviar_template(self, telefono: str, nome_template: str, parametros: list[str]) -> bool:
+        """
+        Envía uma mensagem a partir de um template pré-aprovado — necessário
+        para o negócio iniciar uma conversa fora da janela de 24h desde a
+        última mensagem do destinatário. Os proveedores que não suportem
+        templates devem sobrescrever ou aceitar a falha (retorna False).
+        """
+        return False
