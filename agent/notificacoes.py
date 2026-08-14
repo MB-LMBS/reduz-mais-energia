@@ -150,6 +150,28 @@ def _titulo_notificacao(agendamento: dict) -> str:
     return "Chamada agendada"
 
 
+async def notificar_convidados(
+    proveedor, convidados: list[str], descricao: str, data_str: str, hora_str: str, nota: str = "",
+) -> int:
+    """
+    Avisa cada convidado por WhatsApp de um compromisso da agenda pessoal do
+    consultor, via template pré-aprovado (convite_reuniao_convidado) —
+    necessário para o negócio iniciar a conversa fora da janela de 24h.
+    Retorna quantos convites foram enviados com sucesso.
+    """
+    extra = nota.strip() if nota and nota.strip() else "Agradecemos a confirmação da sua presença."
+    sucesso = 0
+    for numero in convidados:
+        ok = await proveedor.enviar_template(
+            numero, "convite_reuniao_convidado", [descricao, data_str, hora_str, extra],
+        )
+        if ok:
+            sucesso += 1
+        else:
+            logger.warning(f"Falha ao enviar convite de compromisso a {numero}")
+    return sucesso
+
+
 async def notificar_agendamento(proveedor, agendamento: dict) -> bool:
     """
     Envía un alerta al WhatsApp personal del consultor cuando se marca una

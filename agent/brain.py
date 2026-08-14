@@ -29,7 +29,7 @@ from agent.calendario import (
     criar_evento_dia_inteiro,
 )
 from agent.outlook_calendar import apagar_evento_chamada as apagar_evento_outlook
-from agent.notificacoes import notificar_cancelamento, NUMERO_CONSULTOR
+from agent.notificacoes import notificar_cancelamento, notificar_convidados, NUMERO_CONSULTOR
 from agent.providers import obtener_proveedor
 
 load_dotenv()
@@ -434,7 +434,10 @@ async def obtener_contexto_agenda(telefono: str = "") -> str:
             "ele pediu.\n"
             "4. Pergunta se quer convidar mais alguém (sim/não em botões); se "
             "sim, pede o(s) número(s) de telefone em texto livre (pode ser "
-            "mais que um).\n"
+            "mais que um), ou aceita que ele partilhe o contacto diretamente "
+            "do telemóvel (aparece como \"[Contacto partilhado: Nome — "
+            "número]\" na conversa — usa esse número). Os convidados recebem "
+            "automaticamente uma mensagem de WhatsApp com os detalhes.\n"
             "Só depois de teres estes detalhes (mesmo que resumidos) chamas "
             "agendar_chamada com tudo preenchido — não precisas de consultar "
             "disponibilidade nem de sugerir horários de uma lista, a agenda "
@@ -591,6 +594,17 @@ async def _processar_agendamento(entrada: dict, telefono: str) -> tuple[str, dic
         "presencial": "Presencial", "telefonica": "Telefónica", "teams": "Teams",
         "deslocacao": "Deslocação", "recordatorio": "Recordatório",
     }
+    rotulos_confirmacao = {
+        "presencial": "Reunião presencial", "telefonica": "Chamada",
+        "teams": "Reunião por Teams", "deslocacao": "Deslocação",
+        "recordatorio": "Recordatório",
+    }
+    rotulo_confirmacao = rotulos_confirmacao.get(formato, "Compromisso")
+    instrucao_rotulo = (
+        f"Usa exatamente a palavra \"{rotulo_confirmacao}\" para te referires a "
+        "isto na confirmação — nunca digas \"chamada\", isto não é uma chamada "
+        "telefónica."
+    ) if formato and formato != "telefonica" else "Confirma isto ao Luis de forma clara."
     if e_agenda_pessoal:
         if tipo_evento == "pessoal":
             titulo_evento = "Agenda Luis Sequeira"
@@ -602,6 +616,7 @@ async def _processar_agendamento(entrada: dict, telefono: str) -> tuple[str, dic
             linhas_info.append(f"Tipo: {tipo_evento.capitalize()}")
         if formato:
             linhas_info.append(f"Formato: {rotulos_formato.get(formato, formato)}")
+        nota_convite = informacao
         if convidados:
             linhas_info.append(f"Convidados: {', '.join(convidados)}")
         if informacao:
@@ -636,10 +651,14 @@ async def _processar_agendamento(entrada: dict, telefono: str) -> tuple[str, dic
             data_inicio_d.strftime("%d/%m/%Y") if data_fim_d == data_inicio_d
             else f"{data_inicio_d.strftime('%d/%m/%Y')} a {data_fim_d.strftime('%d/%m/%Y')}"
         )
+        if convidados:
+            await notificar_convidados(
+                obtener_proveedor(), convidados, rotulo_confirmacao, intervalo, "dia inteiro", nota_convite,
+            )
         logger.info(f"Evento de dia inteiro agendado: {telefono} - {intervalo}")
         return (
-            f"Compromisso de dia inteiro marcado com sucesso: {intervalo}. "
-            "Confirma isto ao Luis de forma clara.",
+            f"{rotulo_confirmacao} de dia inteiro marcado com sucesso: {intervalo}. "
+            f"{instrucao_rotulo}",
             dados,
         )
 
@@ -693,6 +712,12 @@ async def _processar_agendamento(entrada: dict, telefono: str) -> tuple[str, dic
             kwargs_icloud["titulo"] = titulo_evento
         await criar_evento_icloud(agendamento_id, nome or None, telefono, data_hora, informacao, **kwargs_icloud)
 
+    if e_agenda_pessoal and convidados:
+        await notificar_convidados(
+            obtener_proveedor(), convidados, rotulo_confirmacao,
+            data_hora.strftime("%d/%m/%Y"), data_hora.strftime("%Hh%M"), nota_convite,
+        )
+
     dados = {
         "id": agendamento_id,
         "telefono": telefono,
@@ -706,8 +731,8 @@ async def _processar_agendamento(entrada: dict, telefono: str) -> tuple[str, dic
     logger.info(f"Agendado (Cal.com uid={reserva.get('uid')}): {telefono} - {formatar_slot(data_hora)}")
     if e_agenda_pessoal:
         return (
-            f"Compromisso marcado com sucesso para {formatar_slot(data_hora)}"
-            f"{f' ({titulo_evento})' if titulo_evento else ''}. Confirma isto ao Luis de forma clara.",
+            f"{rotulo_confirmacao} marcado com sucesso para {formatar_slot(data_hora)}"
+            f"{f' ({titulo_evento})' if titulo_evento else ''}. {instrucao_rotulo}",
             dados,
         )
     return (

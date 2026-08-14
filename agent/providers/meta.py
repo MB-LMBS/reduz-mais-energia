@@ -78,6 +78,30 @@ class ProveedorMeta(ProveedorWhatsApp):
                             es_propio=False,
                             nome_contato=nome_contato,
                         ))
+                    elif tipo_meta == "contacts":
+                        # Contacto partilhado do telemóvel (ex: para convidar alguém
+                        # para um compromisso, sem escrever o número à mão)
+                        contactos_partilhados = msg.get("contacts", [])
+                        linhas_contacto = []
+                        for c in contactos_partilhados:
+                            nome_c = (c.get("name", {}) or {}).get("formatted_name", "")
+                            telefones_c = [
+                                (t.get("wa_id") or t.get("phone") or "").strip()
+                                for t in (c.get("phones", []) or [])
+                                if (t.get("wa_id") or t.get("phone"))
+                            ]
+                            if nome_c or telefones_c:
+                                linhas_contacto.append(
+                                    f"[Contacto partilhado: {nome_c or '(sem nome)'} — "
+                                    f"{', '.join(telefones_c) or '(sem número)'}]"
+                                )
+                        mensajes.append(MensajeEntrante(
+                            telefono=msg.get("from", ""),
+                            texto="\n".join(linhas_contacto),
+                            mensaje_id=msg.get("id", ""),
+                            es_propio=False,
+                            nome_contato=nome_contato,
+                        ))
                     elif tipo_meta in TIPOS_MEDIA:
                         dados_media = msg.get(tipo_meta, {})
                         mensajes.append(MensajeEntrante(
