@@ -173,8 +173,14 @@ HERRAMIENTAS = [
                 "duracao_minutos": {
                     "type": "integer",
                     "description": (
-                        "Só para a agenda pessoal do consultor (nunca para clientes): "
-                        "duração estimada do compromisso, em minutos."
+                        "Só para a agenda pessoal do consultor (nunca para clientes, "
+                        "e nunca para dia_inteiro=true): duração estimada do "
+                        "compromisso, SEMPRE em minutos, incluindo quando ele "
+                        "responde em texto livre em vez de escolher um botão — "
+                        "converte sempre para minutos (ex: \"2 horas\" -> 120, "
+                        "\"1h30\" -> 90, \"40 minutos\" -> 40). Nunca deixes este "
+                        "campo vazio na agenda pessoal, senão o compromisso fica "
+                        "com uma duração por omissão errada (30 min)."
                     ),
                 },
                 "convidados": {
@@ -421,7 +427,11 @@ async def obtener_contexto_agenda(telefono: str = "") -> str:
             "faz uma segunda pergunta com Deslocação ou Recordatório.\n"
             "3. Duração estimada — sugere botões rápidos tipo \"15 min\", "
             "\"30 min\", \"1 hora\", e aceita que ele escreva outro valor em "
-            "texto livre se quiser.\n"
+            "texto livre se quiser (ex: \"2 horas\", \"1h30\"). Seja qual for "
+            "a resposta, converte sempre para minutos e preenche "
+            "duracao_minutos com esse número — nunca deixes o campo vazio, "
+            "senão o compromisso fica com 30 min por omissão em vez do que "
+            "ele pediu.\n"
             "4. Pergunta se quer convidar mais alguém (sim/não em botões); se "
             "sim, pede o(s) número(s) de telefone em texto livre (pode ser "
             "mais que um).\n"
