@@ -58,9 +58,11 @@ def _primeiro_nome(nome_completo: str) -> str:
 
 async def enviar_mensagens_periodo(proveedor, periodo: str) -> int:
     """
-    periodo: "manha" ou "fim_dia". Escolhe o próximo template da reserva
-    (sem repetir até esgotar), envia a cada consultor, e avança o índice.
-    Idempotente por dia — se já disparou hoje neste período, não reenvia.
+    periodo: "manha" ou "fim_dia". Cada consultor recebe uma mensagem
+    diferente da reserva (nunca o mesmo texto entre si no mesmo dia) — o
+    índice de cada um é o ciclo do dia desviado pela sua posição na lista,
+    por isso também nunca repete de um dia para o outro. Idempotente por
+    dia — se já disparou hoje neste período, não reenvia.
     Retorna o número de envios bem-sucedidos.
     """
     hoje = date.today()
@@ -68,22 +70,22 @@ async def enviar_mensagens_periodo(proveedor, periodo: str) -> int:
 
     if periodo == "manha":
         pool = TEMPLATES_MANHA
-        chave_indice = "indice_manha"
+        chave_ciclo = "ciclo_manha"
         chave_data = "data_manha"
     else:
         pool = TEMPLATES_SEXTA if sexta else TEMPLATES_FIM_DIA
-        chave_indice = "indice_sexta" if sexta else "indice_fimdia"
+        chave_ciclo = "ciclo_sexta" if sexta else "ciclo_fimdia"
         chave_data = "data_fim_dia"
 
     estado = await _obter_estado()
     if estado.get(chave_data) == hoje.isoformat():
         return 0
 
-    indice = estado.get(chave_indice, 0) % len(pool)
-    template = pool[indice]
+    ciclo = estado.get(chave_ciclo, 0)
 
     sucesso = 0
-    for consultor in CONSULTORES:
+    for posicao, consultor in enumerate(CONSULTORES):
+        template = pool[(ciclo + posicao) % len(pool)]
         ok = await proveedor.enviar_template(
             consultor["telefone"], template, [_primeiro_nome(consultor["nome"])]
         )
@@ -94,12 +96,12 @@ async def enviar_mensagens_periodo(proveedor, periodo: str) -> int:
                 f"Falha ao enviar {template} a {consultor['nome']} ({consultor['telefone']})"
             )
 
-    estado[chave_indice] = (indice + 1) % len(pool)
+    estado[chave_ciclo] = (ciclo + 1) % len(pool)
     estado[chave_data] = hoje.isoformat()
     await _guardar_estado(estado)
 
     logger.info(
-        f"Mensagens de motivação ({periodo}, template {template}): "
-        f"{sucesso}/{len(CONSULTORES)} enviadas"
+        f"Mensagens de motivação ({periodo}, ciclo {ciclo}): "
+        f"{sucesso}/{len(CONSULTORES)} enviadas, cada uma com template diferente"
     )
     return sucesso
