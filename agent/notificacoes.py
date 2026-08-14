@@ -131,6 +131,25 @@ async def notificar_cancelamento(proveedor, agendamento: dict, motivo: str | Non
     return await proveedor.enviar_mensaje(NUMERO_CONSULTOR, "\n".join(lineas))
 
 
+TITULOS_POR_FORMATO = {
+    "presencial": "Reunião presencial agendada",
+    "telefonica": "Chamada agendada",
+    "teams": "Reunião Teams agendada",
+    "deslocacao": "Deslocação agendada",
+    "recordatorio": "Recordatório agendado",
+}
+
+
+def _titulo_notificacao(agendamento: dict) -> str:
+    """Título da notificação — reflete o formato real do compromisso (agenda pessoal) em vez de assumir sempre 'chamada'."""
+    formato = agendamento.get("formato")
+    if formato in TITULOS_POR_FORMATO:
+        return TITULOS_POR_FORMATO[formato]
+    if agendamento.get("tipo_evento"):
+        return "Compromisso agendado"
+    return "Chamada agendada"
+
+
 async def notificar_agendamento(proveedor, agendamento: dict) -> bool:
     """
     Envía un alerta al WhatsApp personal del consultor cuando se marca una
@@ -147,7 +166,7 @@ async def notificar_agendamento(proveedor, agendamento: dict) -> bool:
     informacao = agendamento.get("informacao") or "(sem informação adicional)"
 
     lineas = [
-        "📅 *Chamada agendada*",
+        f"📅 *{_titulo_notificacao(agendamento)}*",
         "",
         f"*Cliente:* {nome}",
         f"*Telefone:* {telefone}",

@@ -24,7 +24,10 @@ from agent.memory import (
     obter_agendamento_ativo_por_telefone, cancelar_agendamento, criar_alerta,
     marcar_alertas_agendamento_vistos,
 )
-from agent.calendario import criar_evento_chamada as criar_evento_icloud, apagar_evento_chamada as apagar_evento_icloud
+from agent.calendario import (
+    criar_evento_chamada as criar_evento_icloud, apagar_evento_chamada as apagar_evento_icloud,
+    criar_evento_dia_inteiro,
+)
 from agent.outlook_calendar import apagar_evento_chamada as apagar_evento_outlook
 from agent.notificacoes import notificar_cancelamento, NUMERO_CONSULTOR
 from agent.providers import obtener_proveedor
@@ -118,7 +121,26 @@ HERRAMIENTAS = [
                 },
                 "hora": {
                     "type": "string",
-                    "description": "Hora escolhida, no formato HH:MM (ex: 14:00, 14:15, 14:30...).",
+                    "description": (
+                        "Hora escolhida, no formato HH:MM (ex: 14:00, 14:15, 14:30...). "
+                        "Obrigatório, exceto quando dia_inteiro=true."
+                    ),
+                },
+                "dia_inteiro": {
+                    "type": "boolean",
+                    "description": (
+                        "Só para a agenda pessoal do consultor (nunca para clientes): "
+                        "true quando é um evento de dia inteiro (ou vários dias), sem "
+                        "hora marcada — ex: férias, viagem, bloquear um dia."
+                    ),
+                },
+                "data_fim": {
+                    "type": "string",
+                    "description": (
+                        "Só usado com dia_inteiro=true e quando o evento se estende por "
+                        "vários dias: última data do intervalo, no formato AAAA-MM-DD "
+                        "(inclusive). Se o evento for só de um dia, não precisa de indicar."
+                    ),
                 },
                 "nome": {
                     "type": "string",
@@ -164,7 +186,7 @@ HERRAMIENTAS = [
                     ),
                 },
             },
-            "required": ["data", "hora", "nome", "informacao"],
+            "required": ["data", "nome", "informacao"],
         },
     },
     {
@@ -385,10 +407,15 @@ async def obtener_contexto_agenda(telefono: str = "") -> str:
             "antecedência), e o assunto pode ser sobre o que ele quiser (não "
             "precisa de ser sobre um cliente ou proposta). Interpreta a "
             "data/hora que ele pedir, mesmo relativa (ex: \"amanhã às 8\").\n\n"
-            "Antes de chamares agendar_chamada, confirma sempre estes 4 "
-            "detalhes com botões (ferramenta oferecer_opcoes, máx. 3 opções "
-            "por pergunta — se precisares de mais que 3, faz 2 perguntas "
-            "seguidas em vez de uma):\n"
+            "Se for um evento sem hora marcada (dia inteiro, férias, viagem, "
+            "bloquear um ou vários dias), usa dia_inteiro=true e não perguntes "
+            "hora nem duração — pergunta só a data de início e, se for mais "
+            "que um dia, a data de fim (data_fim).\n\n"
+            "Nos restantes casos (com hora marcada), antes de chamares "
+            "agendar_chamada confirma sempre estes 4 detalhes com botões "
+            "(ferramenta oferecer_opcoes, máx. 3 opções por pergunta — se "
+            "precisares de mais que 3, faz 2 perguntas seguidas em vez de "
+            "uma):\n"
             "1. Pessoal ou Profissional? (2 botões)\n"
             "2. Formato: Presencial, Telefónica ou Teams — se nenhum servir, "
             "faz uma segunda pergunta com Deslocação ou Recordatório.\n"
@@ -398,7 +425,7 @@ async def obtener_contexto_agenda(telefono: str = "") -> str:
             "4. Pergunta se quer convidar mais alguém (sim/não em botões); se "
             "sim, pede o(s) número(s) de telefone em texto livre (pode ser "
             "mais que um).\n"
-            "Só depois de teres estes 4 detalhes (mesmo que resumidos) chamas "
+            "Só depois de teres estes detalhes (mesmo que resumidos) chamas "
             "agendar_chamada com tudo preenchido — não precisas de consultar "
             "disponibilidade nem de sugerir horários de uma lista, a agenda "
             "dele está sempre livre para isto."
@@ -546,17 +573,19 @@ async def _processar_agendamento(entrada: dict, telefono: str) -> tuple[str, dic
     formato = (entrada.get("formato") or "").strip()
     duracao_minutos = entrada.get("duracao_minutos")
     convidados = [str(c).strip() for c in (entrada.get("convidados") or []) if str(c).strip()]
+    dia_inteiro = bool(entrada.get("dia_inteiro")) and e_agenda_pessoal
+    data_fim_str = (entrada.get("data_fim") or "").strip()
 
     titulo_evento = None
+    rotulos_formato = {
+        "presencial": "Presencial", "telefonica": "Telefónica", "teams": "Teams",
+        "deslocacao": "Deslocação", "recordatorio": "Recordatório",
+    }
     if e_agenda_pessoal:
-        rotulos_formato = {
-            "presencial": "Presencial", "telefonica": "Telefónica", "teams": "Teams",
-            "deslocacao": "Deslocação", "recordatorio": "Recordatório",
-        }
-        partes_titulo = [p for p in (tipo_evento.capitalize(), rotulos_formato.get(formato)) if p]
-        titulo_evento = " — ".join(partes_titulo) or None
-        if titulo_evento and nome:
-            titulo_evento = f"{titulo_evento}: {nome}"
+        if tipo_evento == "pessoal":
+            titulo_evento = "Agenda Luis Sequeira"
+        elif tipo_evento == "profissional":
+            titulo_evento = "Agenda Reduz+ Energia"
 
         linhas_info = []
         if tipo_evento:
@@ -568,6 +597,48 @@ async def _processar_agendamento(entrada: dict, telefono: str) -> tuple[str, dic
         if informacao:
             linhas_info.append(informacao)
         informacao = "\n".join(linhas_info)
+
+    if dia_inteiro:
+        try:
+            data_inicio_d = datetime.strptime(data, "%Y-%m-%d").date()
+        except ValueError:
+            return ("Não foi possível marcar: a data não está num formato válido (AAAA-MM-DD).", None)
+        try:
+            data_fim_d = datetime.strptime(data_fim_str, "%Y-%m-%d").date() if data_fim_str else data_inicio_d
+        except ValueError:
+            return ("Não foi possível marcar: a data de fim não está num formato válido (AAAA-MM-DD).", None)
+        if data_fim_d < data_inicio_d:
+            return ("Não foi possível marcar: a data de fim é anterior à data de início.", None)
+
+        data_hora_dia = datetime.combine(data_inicio_d, datetime.min.time())
+        agendamento_id = await criar_agendamento(telefono, nome or None, data_hora_dia, informacao)
+        if agendamento_id is not None:
+            await criar_evento_dia_inteiro(
+                agendamento_id, titulo_evento or (nome or "Compromisso"), informacao,
+                data_inicio_d, data_fim_d,
+            )
+        dados = {
+            "id": agendamento_id, "telefono": telefono, "nome_cliente": nome,
+            "data_hora": data_hora_dia, "informacao": informacao,
+            "evento_calcom_uid": None, "tipo_evento": tipo_evento, "formato": formato,
+        }
+        intervalo = (
+            data_inicio_d.strftime("%d/%m/%Y") if data_fim_d == data_inicio_d
+            else f"{data_inicio_d.strftime('%d/%m/%Y')} a {data_fim_d.strftime('%d/%m/%Y')}"
+        )
+        logger.info(f"Evento de dia inteiro agendado: {telefono} - {intervalo}")
+        return (
+            f"Compromisso de dia inteiro marcado com sucesso: {intervalo}. "
+            "Confirma isto ao Luis de forma clara.",
+            dados,
+        )
+
+    if not hora:
+        return (
+            "Não foi possível marcar: falta a hora (ou define dia_inteiro=true "
+            "se for um evento sem hora marcada).",
+            None,
+        )
 
     try:
         data_hora = datetime.strptime(f"{data} {hora}", "%Y-%m-%d %H:%M")
@@ -619,6 +690,8 @@ async def _processar_agendamento(entrada: dict, telefono: str) -> tuple[str, dic
         "data_hora": data_hora,
         "informacao": informacao,
         "evento_calcom_uid": reserva.get("uid"),
+        "tipo_evento": tipo_evento,
+        "formato": formato,
     }
     logger.info(f"Agendado (Cal.com uid={reserva.get('uid')}): {telefono} - {formatar_slot(data_hora)}")
     if e_agenda_pessoal:

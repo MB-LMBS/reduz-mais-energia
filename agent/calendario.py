@@ -109,6 +109,44 @@ async def criar_evento_chamada(
         return False
 
 
+def _construir_ical_dia_inteiro(agendamento_id: int, titulo: str, informacao: str, data_inicio, data_fim) -> bytes:
+    """Evento de dia inteiro (ou vários dias) — sem hora, sem lembrete (não se aplica a este tipo de evento)."""
+    cal = ICalendar()
+    cal.add("prodid", "-//Reduz+ Energia//AgentKit//PT")
+    cal.add("version", "2.0")
+
+    evento = ICalEvent()
+    evento.add("uid", _uid_evento(agendamento_id))
+    evento.add("summary", titulo)
+    evento.add("dtstart", data_inicio)
+    evento.add("dtend", data_fim + timedelta(days=1))  # DTEND é exclusivo no formato de dia inteiro
+    if informacao:
+        evento.add("description", informacao)
+
+    cal.add_component(evento)
+    return cal.to_ical()
+
+
+def _criar_evento_dia_inteiro_sync(agendamento_id: int, titulo: str, informacao: str, data_inicio, data_fim):
+    calendario = _obter_calendario()
+    ical = _construir_ical_dia_inteiro(agendamento_id, titulo, informacao, data_inicio, data_fim)
+    calendario.save_event(ical)
+
+
+async def criar_evento_dia_inteiro(agendamento_id: int, titulo: str, informacao: str, data_inicio, data_fim) -> bool:
+    """Cria um evento de dia inteiro (ou vários dias) no iCloud Calendar. Retorna True se teve sucesso."""
+    if not icloud_configurado():
+        logger.info("ICLOUD_EMAIL/ICLOUD_APP_PASSWORD não configurados — a saltar sincronização com iCloud")
+        return False
+    try:
+        await asyncio.to_thread(_criar_evento_dia_inteiro_sync, agendamento_id, titulo, informacao, data_inicio, data_fim)
+        logger.info(f"Evento de dia inteiro criado no iCloud Calendar para o agendamento {agendamento_id}")
+        return True
+    except Exception as e:
+        logger.error(f"Erro ao criar evento de dia inteiro no iCloud Calendar: {e}")
+        return False
+
+
 def _apagar_evento_sync(agendamento_id: int):
     # Não usa calendario.event_by_uid()/search(uid=...) — o iCloud responde
     # 412 Precondition Failed a essa pesquisa (incompatibilidade do lado
