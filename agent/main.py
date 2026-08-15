@@ -36,6 +36,7 @@ from agent.outlook_calendar import criar_evento_chamada as criar_evento_outlook
 from agent.admin import router as admin_router, LOGO_URL
 from agent.formatacao_whatsapp import negrito_campos, extrair_links, rotulo_botao
 from agent.motivacao import enviar_mensagens_periodo
+from integrations.attio import sincronizar_lead_attio
 
 load_dotenv()
 
@@ -324,6 +325,7 @@ async def webhook_handler(request: Request):
                     "escalada", msg.telefono,
                     f"🔔 {nome_contato or msg.telefono} pediu para falar com um consultor",
                 )
+                await sincronizar_lead_attio(msg.telefono, nome_contato, motivo_escalada)
 
             # Si se marcó una chamada, avisamos al consultor con toda la
             # información que el cliente registró
