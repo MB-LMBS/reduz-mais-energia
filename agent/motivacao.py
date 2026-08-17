@@ -104,7 +104,10 @@ async def _gerar_e_submeter_novo_lote(tipo: str):
             "- Foca sempre em esforço, resiliência, aprendizagem e espírito de equipa.\n"
             "- Podes usar um emoji relevante por mensagem.\n"
             "- Entre 100 e 280 caracteres cada.\n"
-            "- Cada mensagem diferente das outras, sem se repetirem em estrutura.\n\n"
+            "- Cada mensagem diferente das outras, sem se repetirem em estrutura.\n"
+            "- Atenção à acentuação correta do português: não confundas 'e' (conjunção, "
+            "sem acento) com 'é' (verbo ser, com acento agudo) — revê cada frase antes de "
+            "a devolveres para garantir que este erro não acontece.\n\n"
             "Devolve só as mensagens, uma por linha, sem numeração nem comentários."
         )
         response = await client.messages.create(

@@ -64,16 +64,27 @@ async def proximo_indice_livre(prefixo: str) -> int:
     return maior + 1
 
 
-async def criar_template(nome: str, texto_corpo: str, categoria: str = "MARKETING") -> bool:
-    """Submete um novo template à revisão da Meta. Retorna True se aceite (fica PENDING)."""
+async def criar_template(
+    nome: str, texto_corpo: str, categoria: str = "MARKETING", exemplo_nome: str = "Luis"
+) -> bool:
+    """
+    Submete um novo template à revisão da Meta. Retorna True se aceite (fica PENDING).
+
+    Se o corpo tiver uma variável ({{1}}), é obrigatório incluir um valor de
+    exemplo — sem isto a Meta rejeita instantaneamente com INVALID_FORMAT,
+    sem sequer entrar em revisão manual.
+    """
     if not configurado():
         logger.warning("META_WABA_ID não configurado — não é possível criar templates")
         return False
+    body_component = {"type": "BODY", "text": texto_corpo}
+    if "{{1}}" in texto_corpo:
+        body_component["example"] = {"body_text": [[exemplo_nome]]}
     payload = {
         "name": nome,
         "language": "pt_PT",
         "category": categoria,
-        "components": [{"type": "BODY", "text": texto_corpo}],
+        "components": [body_component],
     }
     async with httpx.AsyncClient(timeout=30) as client:
         r = await client.post(
