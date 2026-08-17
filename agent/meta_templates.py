@@ -35,7 +35,7 @@ async def listar_templates(prefixo: str = "") -> list[dict]:
     async with httpx.AsyncClient(timeout=30) as client:
         r = await client.get(
             f"{GRAPH}/{META_WABA_ID}/message_templates",
-            params={"access_token": META_ACCESS_TOKEN, "fields": "name,status", "limit": 200},
+            headers={"Authorization": f"Bearer {META_ACCESS_TOKEN}"}, params={"fields": "name,status", "limit": 200},
         )
         if r.status_code != 200:
             logger.error(f"Erro Meta (listar templates): {r.status_code} — {r.text}")
