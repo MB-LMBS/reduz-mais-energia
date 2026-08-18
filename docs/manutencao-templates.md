@@ -133,3 +133,71 @@ Nenhuma alteração feita a `agent/meta_templates.py` — a correção do campo
    para que serve nem se está a ser referenciado nalgum código fora deste
    repositório — não mexi nele. Se não for necessário, considerar apagar depois
    de confirmar que não é usado.
+
+---
+
+## 18/08/2026
+
+### Estado encontrado no início desta execução
+
+Listagem completa de `mensagem_*` (68 templates). Trabalho pendente de 17/08 — confirmado resolvido:
+
+- `mensagem_sexta_16`, `17`, `18` — passaram de `PENDING` a **APPROVED**.
+- `mensagem_manha_25` a `35` (correções de acentuação) — todas **APPROVED**.
+- `mensagem_manha_13` a `24` — já existiam (criadas em 17/08) e estão **APPROVED**.
+- `mensagem_fimdia_21` a `30` e `mensagem_sexta_13` a `18` — **APPROVED** (substitutos
+  dos rejeitados). Ou seja, as mensagens das 19h30 (Segunda a Sexta) já devem estar
+  a ser entregues normalmente desde a execução anterior.
+- `mensagem_fimdia_11-20`, `mensagem_sexta_07-12` — continuavam **REJECTED**
+  (`INVALID_FORMAT`), já substituídos e não usados em código.
+- `mensagem_sexta_urgente_01` — continua **REJECTED** (`INVALID_FORMAT`), propósito
+  ainda por esclarecer (ver ponto 5 do registo de 17/08).
+
+Revi o texto de todos os templates `APPROVED`: `mensagem_manha_01-06` e `08-12`
+(originais, ainda por apagar) continuavam com os erros de acentuação já
+identificados ("e"/"é", "esta"/"está", "esforco"/"esforço", etc.). Todos os
+outros (`manha_07`, `13-35`, `fimdia_21-30`, `sexta_13-18`) estão com a
+acentuação correta — nenhuma correção nova necessária hoje.
+
+### Trabalho realizado
+
+Com os dois pontos pendentes de 17/08 confirmados (`sexta_16-18` e `manha_25-35`
+ambos `APPROVED`), procedi à limpeza combinada anteriormente:
+
+**1. Apagados 27 templates** (todos confirmados `200 {"success":true}` na API):
+- `mensagem_fimdia_11` a `20` (10) — `REJECTED`, substituídos por `21-30`.
+- `mensagem_sexta_07` a `12` (6) — `REJECTED`, substituídos por `13-18`.
+- `mensagem_manha_01-06` e `08-12` (11) — `APPROVED` mas com acentuação errada,
+  substituídos por `manha_25-35` (cópias corrigidas). `manha_07` não foi tocado
+  (já estava correto) nem `manha_19` (cópia corrigida do `07`, já aprovada antes).
+
+`mensagem_sexta_urgente_01` **não foi apagado** — continua sem se perceber a
+função nem se está referenciado fora deste repositório; mantenho a cautela do
+registo anterior.
+
+Confirmação final: restam 41 templates `mensagem_*`, todos `APPROVED` exceto o
+`sexta_urgente_01` (`REJECTED`, deixado de propósito).
+
+**2. Adicionada `apagar_template()` a `agent/meta_templates.py`** — não existia
+nenhuma função para apagar templates (só criar/listar), e a limpeza acima (e as
+futuras, quando a próxima geração de substitutos for aprovada) precisa dela.
+Faz `DELETE` ao mesmo endpoint dos templates, pelo nome.
+
+**3. Atualizado `POOL_RESERVA` em `agent/motivacao.py`**:
+- `manha`: deixou de incluir `01-06` e `08-12` (agora apagados); passa a ser
+  `07` + `13-24` + `25-35` (24 templates, todos ativos).
+- `sexta`: passou de `[13,14,15]` para `[13,14,15,16,17,18]`, agora que os
+  três últimos estão confirmados `APPROVED`.
+- `fim_dia`: sem alteração (já apontava para `21-30`, todos `APPROVED`).
+
+Sintaxe de ambos os ficheiros verificada (`ast.parse`) antes do commit.
+
+### Pendente para a próxima execução
+
+1. Continuar a rever `mensagem_manha_13-35`, `mensagem_fimdia_21-30` e
+   `mensagem_sexta_13-18` por acentuação/erros — revistas hoje sem problemas,
+   mas vale a pena confirmar de novo com olhos frescos.
+2. `mensagem_sexta_urgente_01` continua por esclarecer — ver ponto 5 do registo
+   de 17/08 (ainda válido, nada de novo a acrescentar).
+3. Nenhum trabalho pendente conhecido do bug do campo `example` — todos os
+   templates ativos já o incluem.

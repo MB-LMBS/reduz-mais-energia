@@ -40,14 +40,13 @@ CONSULTORES = [
 PREFIXOS = {"manha": "mensagem_manha_", "fim_dia": "mensagem_fimdia_", "sexta": "mensagem_sexta_"}
 
 # Reserva de segurança, usada só se a consulta à Meta falhar (ex: API em baixo)
-# — atualizado em 17/08/2026: a reserva anterior de fim_dia (11-20) e sexta
-# (07-12) apontava só para templates entretanto REJECTED (bug do `example`
-# em falta, ver docs/manutencao-templates.md), pelo que falharia por completo
-# se a consulta à Meta caísse. Agora aponta para os substitutos já aprovados.
+# — atualizado em 18/08/2026: manha_01-06 e 08-12 foram apagados (substituídos
+# por 25-35, com acentuação corrigida) e sexta_16-18 já confirmados APPROVED,
+# por isso passam a fazer parte da reserva. Ver docs/manutencao-templates.md.
 POOL_RESERVA = {
-    "manha": [f"mensagem_manha_{i:02d}" for i in range(1, 25)],
+    "manha": [f"mensagem_manha_{i:02d}" for i in [7, *range(13, 25), *range(25, 36)]],
     "fim_dia": [f"mensagem_fimdia_{i:02d}" for i in range(21, 31)],
-    "sexta": [f"mensagem_sexta_{i:02d}" for i in (13, 14, 15)],
+    "sexta": [f"mensagem_sexta_{i:02d}" for i in range(13, 19)],
 }
 
 NOVAS_MENSAGENS_POR_LOTE = 4

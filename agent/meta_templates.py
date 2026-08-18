@@ -97,3 +97,24 @@ async def criar_template(
             return False
         logger.info(f"Template {nome} submetido à Meta: {r.json()}")
         return True
+
+
+async def apagar_template(nome: str) -> bool:
+    """
+    Apaga definitivamente um template pelo nome (todas as línguas desse nome).
+    Usar só depois de confirmar que um substituto já está APPROVED — nunca
+    apagar um template que ainda esteja em uso ativo na rotação.
+    """
+    if not configurado():
+        logger.warning("META_WABA_ID não configurado — não é possível apagar templates")
+        return False
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.delete(
+            f"{GRAPH}/{META_WABA_ID}/message_templates",
+            params={"access_token": META_ACCESS_TOKEN, "name": nome},
+        )
+        if r.status_code != 200:
+            logger.error(f"Erro Meta (apagar template {nome}): {r.status_code} — {r.text}")
+            return False
+        logger.info(f"Template {nome} apagado da Meta")
+        return True
