@@ -201,3 +201,82 @@ Sintaxe de ambos os ficheiros verificada (`ast.parse`) antes do commit.
    de 17/08 (ainda válido, nada de novo a acrescentar).
 3. Nenhum trabalho pendente conhecido do bug do campo `example` — todos os
    templates ativos já o incluem.
+
+---
+
+## 23/08/2026
+
+Nota: não há registos de execuções entre 19 e 22/08 — esta manutenção diária
+parece não ter corrido nesses dias (sem commits neste ficheiro nesse intervalo).
+Nada indica perda de dados; só um espaço sem execução.
+
+### Estado encontrado no início desta execução
+
+Listagem completa via GET `message_templates` (fields
+`name,status,rejected_reason,components,language`) — 41 templates `mensagem_*`:
+
+- **Trabalho pendente de 17/08 (prioridade máxima do enunciado da tarefa) —
+  confirmado totalmente resolvido**, sem necessidade de qualquer ação:
+  - `mensagem_manha_13` a `24` (10 templates pedidos para recriar) — já existiam
+    (criados em 17/08) e estão todos **APPROVED**, todos com `example`.
+  - `mensagem_fimdia_21-30` e `mensagem_sexta_13-18` (substitutos dos que
+    estavam `REJECTED` por `INVALID_FORMAT`) — todos **APPROVED**. As mensagens
+    das 19h30 (Seg-Sex) devem estar a ser entregues normalmente.
+- `mensagem_sexta_urgente_01` — continua **REJECTED** (`INVALID_FORMAT`, sem
+  `example`), propósito por esclarecer (ver ponto 5 do registo de 17/08, ainda
+  válido). Não referenciado em nenhum código deste repositório (confirmado por
+  pesquisa de texto a "urgente" e a "manha_07" — só aparecem neste ficheiro).
+  Mantida a mesma cautela dos registos anteriores: não apagado.
+
+### Trabalho realizado
+
+**Verificação de rotina de acentuação (ponto 4 da tarefa):** ao rever o texto
+de todos os `APPROVED`, encontrei um erro que os registos de 17/08 e 18/08
+não detetaram corretamente: `mensagem_manha_07` continha o texto original
+com erros ("a consistencia e que faz a diferenca todos os dias" — em falta os
+acentos em "consistência" e "diferença", e "e" por "é"). O registo de 18/08
+tinha concluído por engano que "07 está correto", quando na verdade
+`mensagem_manha_19` é que já era a cópia corrigida ("a consistência é que faz
+a diferença todos os dias"), aprovada há vários dias — e o `07` original,
+com o erro, continuava ativo na rotação (`POOL_RESERVA` incluía-o
+explicitamente, e a consulta dinâmica à Meta também o incluía por estar
+`APPROVED`). Ou seja, a equipa comercial esteve a receber esta mensagem com
+erros de português sempre que o ciclo caía no `07`.
+
+Como já existia um substituto correto e `APPROVED` há muito tempo (`19`, com
+exatamente o mesmo texto senão o erro), não submeti um novo template — teria
+sido rejeitado por duplicação de conteúdo (o mesmo erro `error_subcode
+2388024` já visto no registo de 17/08). Em vez disso, apaguei diretamente
+`mensagem_manha_07` (`DELETE` confirmado `200 {"success":true}`), já que a
+condição de segurança ("nunca apagar sem confirmar primeiro que o substituto
+está `APPROVED`") estava mais do que cumprida — o substituto (`19`) está
+`APPROVED` há dias, não desde hoje.
+
+Atualizado `POOL_RESERVA` em `agent/motivacao.py` (`manha`): removido o índice
+`7`, fica `13-24` + `25-35` (23 templates, todos ativos e confirmados sem
+erros de acentuação nesta revisão). `fim_dia` e `sexta` sem alterações
+(`21-30` e `13-18`, todos `APPROVED` e revistos sem problemas). Sintaxe de
+`agent/motivacao.py` verificada com `ast.parse` antes do commit. Nenhuma
+alteração a `agent/meta_templates.py` — a correção do campo `example`
+mantém-se estável.
+
+Revisão de todos os restantes templates `APPROVED` (`manha_13-35` exceto `07`
+já tratado, `fimdia_21-30`, `sexta_13-18`) — sem outros erros de acentuação
+ou de português encontrados nesta execução.
+
+Confirmação final: restam 40 templates `mensagem_*` (era 41), todos
+`APPROVED` exceto `mensagem_sexta_urgente_01` (`REJECTED`, deixado de
+propósito).
+
+### Pendente para a próxima execução
+
+1. Confirmar de novo, com olhos frescos, a acentuação de `mensagem_manha_13-24`
+   e `25-35`, `mensagem_fimdia_21-30` e `mensagem_sexta_13-18` — o erro do
+   `manha_07` mostra que vale a pena comparar o texto com cuidado a cada
+   execução, e não confiar cegamente em conclusões de registos anteriores.
+2. `mensagem_sexta_urgente_01` continua por esclarecer (ver ponto 5 do
+   registo de 17/08) — também tem erros de acentuação semelhantes aos do
+   antigo `manha_07` ("dedicacao", "Ate"), mas por estar `REJECTED` e sem uso
+   conhecido no código, não foi tocado.
+3. Nenhum trabalho pendente do bug do campo `example` — todos os templates
+   ativos continuam a incluí-lo.
