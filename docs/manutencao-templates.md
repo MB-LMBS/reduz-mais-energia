@@ -280,3 +280,51 @@ propósito).
    conhecido no código, não foi tocado.
 3. Nenhum trabalho pendente do bug do campo `example` — todos os templates
    ativos continuam a incluí-lo.
+
+---
+
+## 24/08/2026
+
+### Estado encontrado no início desta execução
+
+Listagem completa via GET `message_templates` (fields
+`name,status,rejected_reason,components,language`) — 40 templates `mensagem_*`:
+
+- **Trabalho pendente de 17/08 (prioridade máxima do enunciado da tarefa) —
+  continua totalmente resolvido**: `mensagem_manha_13-24`, `mensagem_fimdia_21-30`
+  e `mensagem_sexta_13-18` — todos **APPROVED**, todos com `example`. As
+  mensagens das 19h30 (Seg-Sex) devem continuar a ser entregues normalmente.
+- `mensagem_sexta_urgente_01` — continua **REJECTED** (`INVALID_FORMAT`, sem
+  `example`, texto ainda com "dedicacao"/"Ate" por corrigir). Mesma situação
+  dos registos de 17, 18 e 23/08: não referenciado em nenhum código deste
+  repositório, propósito ainda por esclarecer, nome fora do padrão numérico
+  usado por `proximo_indice_livre()`/`_obter_pool()`. Mantida a mesma cautela
+  dos registos anteriores — não corrigido nem apagado.
+- Todos os outros 39 templates ativos (`manha_13-35`, `fimdia_21-30`,
+  `sexta_13-18`) — **APPROVED**.
+
+### Trabalho realizado
+
+**Verificação de rotina (ponto 4 da tarefa):** revi com cuidado o texto de
+todos os 39 templates `APPROVED` (acentuação, cedilhas, confusão "e"/"é" —
+o mesmo tipo de erro encontrado no antigo `manha_07` em 23/08). Não encontrei
+nenhum erro de português nesta execução — todos os textos estão corretos.
+
+Comparei também `POOL_RESERVA` em `agent/motivacao.py` com a listagem atual
+da Meta: `manha` (`13-24`+`25-35`, 23 templates), `fim_dia` (`21-30`, 10
+templates) e `sexta` (`13-18`, 6 templates) continuam todos `APPROVED` e sem
+divergência da reserva. Nenhuma alteração de código necessária hoje — nem em
+`agent/motivacao.py` nem em `agent/meta_templates.py`.
+
+Nenhum template novo foi criado nem apagado nesta execução.
+
+### Pendente para a próxima execução
+
+1. Continuar a rever a acentuação de todos os templates `APPROVED` a cada
+   execução, com olhos frescos (não confiar em conclusões de registos
+   anteriores — foi assim que o erro do antigo `manha_07` escapou a duas
+   execuções antes de ser encontrado em 23/08).
+2. `mensagem_sexta_urgente_01` continua por esclarecer (ver ponto 5 do
+   registo de 17/08) — sem novidades hoje.
+3. Nenhum trabalho pendente do bug do campo `example` — todos os templates
+   ativos continuam a incluí-lo.
