@@ -378,3 +378,58 @@ inalterado desde 24/08.
    registo de 17/08) — sem novidades hoje.
 3. Nenhum trabalho pendente do bug do campo `example` — todos os templates
    ativos continuam a incluí-lo.
+
+---
+
+## 26/08/2026
+
+### Estado encontrado no início desta execução
+
+Listagem completa via GET `message_templates` (fields
+`name,status,rejected_reason,components,language`) — 40 templates `mensagem_*`,
+exatamente os mesmos nomes e estados dos registos de 24/08 e 25/08:
+
+- **Trabalho pendente de 17/08 (prioridade máxima do enunciado da tarefa) —
+  continua totalmente resolvido**: `mensagem_manha_13-24`, `mensagem_fimdia_21-30`
+  e `mensagem_sexta_13-18` — todos **APPROVED**, todos com `example`. As
+  mensagens das 19h30 (Quarta e Sexta, ver nota abaixo) devem continuar a ser
+  entregues normalmente.
+- `mensagem_sexta_urgente_01` — continua **REJECTED** (`INVALID_FORMAT`, sem
+  `example`), propósito ainda por esclarecer (ver ponto 5 do registo de
+  17/08, ainda válido). Mantida a mesma cautela dos registos anteriores —
+  não corrigido nem apagado.
+- Todos os outros 39 templates ativos (`manha_13-35`, `fimdia_21-30`,
+  `sexta_13-18`) — **APPROVED**.
+
+Nota (fora do âmbito dos templates, só para registo): em 25/08/2026 o
+horário de disparo em `agent/main.py` foi alterado por commit manual do
+utilizador (`a685b51`, fora desta manutenção) — deixou de disparar todos os
+dias úteis e passa a disparar só segunda de manhã, quarta ao final do dia e
+sexta ao final da semana. Não afeta a reserva de templates nem `POOL_RESERVA`
+em `agent/motivacao.py` (continuam corretos, ver abaixo), só a frequência de
+envio.
+
+### Trabalho realizado
+
+**Verificação de rotina (ponto 4 da tarefa):** revi com cuidado, com olhos
+frescos, o texto de todos os 39 templates `APPROVED` (acentuação, cedilhas,
+confusão "e"/"é"). Não encontrei nenhum erro de português nesta execução —
+todos os textos estão corretos.
+
+Comparei `POOL_RESERVA` em `agent/motivacao.py` com a listagem atual da Meta:
+`manha` (`13-24`+`25-35`, 23 templates), `fim_dia` (`21-30`, 10 templates) e
+`sexta` (`13-18`, 6 templates) continuam todos `APPROVED` e sem divergência da
+reserva. Nenhuma alteração de código necessária hoje — nem em
+`agent/motivacao.py` nem em `agent/meta_templates.py`.
+
+Nenhum template novo foi criado nem apagado nesta execução. Estado
+inalterado desde 25/08.
+
+### Pendente para a próxima execução
+
+1. Continuar a rever a acentuação de todos os templates `APPROVED` a cada
+   execução, com olhos frescos.
+2. `mensagem_sexta_urgente_01` continua por esclarecer (ver ponto 5 do
+   registo de 17/08) — sem novidades hoje.
+3. Nenhum trabalho pendente do bug do campo `example` — todos os templates
+   ativos continuam a incluí-lo.
