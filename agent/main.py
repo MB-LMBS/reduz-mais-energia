@@ -79,11 +79,7 @@ MARCADOR_ACEITACAO_PROPOSTA = "SUBMETER PROPOSTA PARA FORMALIZAÇÃO"
 
 def montar_confirmacao_aceitacao_proposta() -> str:
     """Confirmação curta ao cliente quando submete a aceitação da proposta."""
-    return (
-        "✅ *Muito obrigado pela sua confiança!*\n\n"
-        "Para avançarmos com a formalização, agradecemos que nos envie por aqui "
-        "a sua *FATURA DE CONSUMO DE ENERGIA COMPLETA E LEGÍVEL* (todas as páginas)."
-    )
+    return "✅ *PROPOSTA PARA FORMALIZAÇÃO foi submetida com sucesso*"
 
 # Intervalo (segundos) entre verificaciones de llamadas agendadas próximas
 INTERVALO_LEMBRETES = 60
