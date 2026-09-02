@@ -115,6 +115,19 @@ class ProveedorMeta(ProveedorWhatsApp):
                             nome_ficheiro=dados_media.get("filename"),
                             nome_contato=nome_contato,
                         ))
+
+                # A Meta envia neste mesmo webhook o estado de entrega de cada
+                # mensagem que enviámos (sent/delivered/read/failed) — não
+                # geram MensajeEntrante (não são mensagens de um cliente), mas
+                # registamos as falhas para conseguir diagnosticar entregas
+                # que a API aceitou (200 OK ao enviar) e depois não chegaram.
+                for status in value.get("statuses", []):
+                    if status.get("status") == "failed":
+                        erros = status.get("errors", [])
+                        logger.error(
+                            f"Falha na entrega da mensagem {status.get('id')} para "
+                            f"{status.get('recipient_id')}: {erros}"
+                        )
         return mensajes
 
     async def baixar_media(self, media_id: str) -> tuple[bytes, str] | None:
