@@ -71,6 +71,20 @@ def montar_confirmacao_pedido_simulador() -> str:
         "Muito obrigado pela confiança na Reduz+ Energia. 🙏"
     )
 
+# Marcador da mensagem pré-preenchida quando o cliente clica em "Submeter
+# proposta para formalização/aceitação" no simulador (link com aceitar=1) —
+# identifica a aceitação da proposta, para nunca passar pela IA e responder
+# sempre com um agradecimento fixo a pedir os elementos em falta
+MARCADOR_ACEITACAO_PROPOSTA = "SUBMETER PROPOSTA PARA FORMALIZAÇÃO"
+
+def montar_confirmacao_aceitacao_proposta() -> str:
+    """Confirmação curta ao cliente quando submete a aceitação da proposta."""
+    return (
+        "✅ *Muito obrigado pela sua confiança!*\n\n"
+        "Para avançarmos com a formalização, agradecemos que nos envie por aqui "
+        "a sua *FATURA DE CONSUMO DE ENERGIA COMPLETA E LEGÍVEL* (todas as páginas)."
+    )
+
 # Intervalo (segundos) entre verificaciones de llamadas agendadas próximas
 INTERVALO_LEMBRETES = 60
 
@@ -243,6 +257,22 @@ async def webhook_handler(request: Request):
                 )
                 await notificar_pedido_simulador(proveedor, msg.telefono, nome_contato)
                 logger.info(f"Pedido de simulador processado para {msg.telefono}")
+                continue
+
+            # Aceitação/formalização da proposta vinda do simulador (link com
+            # aceitar=1) — nunca passa pela IA: só agradece e pede os
+            # elementos em falta (fatura), e marca a conversa como "Ganho"
+            if msg.tipo == "texto" and msg.texto.strip().lstrip("*").upper().startswith(MARCADOR_ACEITACAO_PROPOSTA):
+                confirmacao = montar_confirmacao_aceitacao_proposta()
+                await guardar_mensaje(msg.telefono, "user", msg.texto, tipo=msg.tipo)
+                await proveedor.enviar_mensaje(msg.telefono, confirmacao)
+                await guardar_mensaje(msg.telefono, "assistant", confirmacao)
+                await establecer_categoria(msg.telefono, "ganho")
+                await criar_alerta(
+                    "aceitacao_proposta", msg.telefono,
+                    f"🎉 {nome_contato or msg.telefono} submeteu a aceitação da proposta",
+                )
+                logger.info(f"Aceitação de proposta processada para {msg.telefono}")
                 continue
 
             # Si el mensaje trae un archivo (imagen, PDF, etc.), lo descargamos
