@@ -7,6 +7,7 @@ Funciona con cualquier proveedor (Meta, Twilio) gracias a la capa de providers.
 """
 
 import os
+import re
 import uuid
 import asyncio
 import mimetypes
@@ -71,14 +72,30 @@ def montar_confirmacao_pedido_simulador() -> str:
         "Muito obrigado pela confiança na Reduz+ Energia. 🙏"
     )
 
-# Marcador da mensagem pré-preenchida quando o cliente clica em "Submeter
-# proposta para formalização/aceitação" no simulador (link com aceitar=1) —
-# identifica a aceitação da proposta, para nunca passar pela IA e responder
-# sempre com um agradecimento fixo a pedir os elementos em falta
+# Marcador da mensagem pré-preenchida pelo simulador (link com aceitar=1) ao
+# submeter a aceitação de uma proposta — normalmente enviada pelo próprio
+# consultor/gestor de cliente em nome do cliente (secção "SUBMETIDO POR"),
+# com os dados do cliente numa secção à parte ("DADOS DO CLIENTE"). Nunca
+# passa pela IA — responde sempre com uma confirmação fixa.
 MARCADOR_ACEITACAO_PROPOSTA = "SUBMETER PROPOSTA PARA FORMALIZAÇÃO"
 
+
+def extrair_dados_cliente_aceitacao(texto: str) -> tuple[str | None, str | None]:
+    """
+    Extrai nome e telemóvel da secção "DADOS DO CLIENTE" do texto de
+    aceitação da proposta — distintos dos dados de quem submete (consultor),
+    que vêm numa secção separada mais abaixo ("SUBMETIDO POR").
+    """
+    secao = texto.split("*SUBMETIDO POR*")[0]
+    m_nome = re.search(r"Nome:\s*(.+)", secao)
+    nome = m_nome.group(1).strip() if m_nome else None
+    m_tel = re.search(r"Telem[oó]vel:\s*\+?(\d[\d\s]*)", secao)
+    telefone = re.sub(r"\D", "", m_tel.group(1)) if m_tel else None
+    return nome, telefone
+
+
 def montar_confirmacao_aceitacao_proposta() -> str:
-    """Confirmação curta ao cliente quando submete a aceitação da proposta."""
+    """Confirmação curta enviada quando a aceitação da proposta é submetida."""
     return "✅ *PROPOSTA PARA FORMALIZAÇÃO foi submetida com sucesso*"
 
 # Intervalo (segundos) entre verificaciones de llamadas agendadas próximas
@@ -256,17 +273,28 @@ async def webhook_handler(request: Request):
                 continue
 
             # Aceitação/formalização da proposta vinda do simulador (link com
-            # aceitar=1) — nunca passa pela IA: só agradece e pede os
-            # elementos em falta (fatura), e marca a conversa como "Ganho"
+            # aceitar=1) — nunca passa pela IA: só confirma, e marca a
+            # conversa do cliente como "Ganho". Normalmente enviada pelo
+            # consultor em nome do cliente, por isso a confirmação vai tanto
+            # para quem submeteu como para o telemóvel do cliente indicado
+            # nos dados (quando presente e diferente de quem submeteu).
             if msg.tipo == "texto" and msg.texto.strip().lstrip("*").upper().startswith(MARCADOR_ACEITACAO_PROPOSTA):
+                nome_cliente_aceitacao, telefone_cliente_aceitacao = extrair_dados_cliente_aceitacao(msg.texto)
                 confirmacao = montar_confirmacao_aceitacao_proposta()
                 await guardar_mensaje(msg.telefono, "user", msg.texto, tipo=msg.tipo)
                 await proveedor.enviar_mensaje(msg.telefono, confirmacao)
                 await guardar_mensaje(msg.telefono, "assistant", confirmacao)
-                await establecer_categoria(msg.telefono, "ganho")
+
+                telefone_ganho = msg.telefono
+                if telefone_cliente_aceitacao and telefone_cliente_aceitacao != msg.telefono:
+                    await proveedor.enviar_mensaje(telefone_cliente_aceitacao, confirmacao)
+                    await guardar_mensaje(telefone_cliente_aceitacao, "assistant", confirmacao)
+                    telefone_ganho = telefone_cliente_aceitacao
+
+                await establecer_categoria(telefone_ganho, "ganho")
                 await criar_alerta(
-                    "aceitacao_proposta", msg.telefono,
-                    f"🎉 {nome_contato or msg.telefono} submeteu a aceitação da proposta",
+                    "aceitacao_proposta", telefone_ganho,
+                    f"🎉 {nome_cliente_aceitacao or nome_contato or telefone_ganho} submeteu a aceitação da proposta",
                 )
                 logger.info(f"Aceitação de proposta processada para {msg.telefono}")
                 continue
