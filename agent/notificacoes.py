@@ -54,6 +54,36 @@ async def notificar_consultor(
     return enviado
 
 
+TEMPLATE_ALERTA_PEDIDO_SIMULADOR = "alerta_novo_pedido_simulador"
+
+
+async def notificar_pedido_simulador(proveedor, telefono_cliente: str, nome_contato: str | None) -> bool:
+    """
+    Avisa o consultor de forma curta que chegou um novo pedido pelo
+    simulador de eletricidade — sem repetir os dados completos do pedido
+    (esses ficam só na conversa, acessível pelo botão). Tenta primeiro o
+    template aprovado pela Meta (entrega garantida, mesmo fora da janela
+    de 24h) e só usa texto livre como recurso se o template ainda não
+    estiver aprovado. Retorna True se a notificação foi enviada com
+    sucesso por algum dos dois caminhos.
+    """
+    if not NUMERO_CONSULTOR:
+        logger.warning("NUMERO_CONSULTOR no configurado — no se puede notificar pedido de simulador")
+        return False
+
+    quem = nome_contato or telefono_cliente
+    enviado = await proveedor.enviar_template(NUMERO_CONSULTOR, TEMPLATE_ALERTA_PEDIDO_SIMULADOR, [])
+    if not enviado:
+        enviado = await proveedor.enviar_mensaje(
+            NUMERO_CONSULTOR, f"🔔 *Novo pedido recebido* — {quem}\nPedido pelo simulador de eletricidade."
+        )
+    await proveedor.enviar_botao_link(
+        NUMERO_CONSULTOR, "Ver detalhes do pedido:", "Abrir conversa",
+        f"{APP_BASE_URL}/admin/conversa/{telefono_cliente}",
+    )
+    return enviado
+
+
 async def notificar_lembrete_chamada(proveedor, agendamento: dict) -> bool:
     """
     Envía un recordatorio al WhatsApp personal del consultor unos minutos

@@ -29,7 +29,7 @@ from agent.memory import (
 )
 from agent.providers import obtener_proveedor
 from agent.notificacoes import (
-    notificar_consultor, notificar_agendamento, notificar_lembrete_chamada, notificar_cliente_lembrete,
+    notificar_consultor, notificar_pedido_simulador, notificar_agendamento, notificar_lembrete_chamada, notificar_cliente_lembrete,
 )
 from agent.calendario import criar_evento_chamada as criar_evento_icloud
 from agent.outlook_calendar import criar_evento_chamada as criar_evento_outlook
@@ -241,10 +241,7 @@ async def webhook_handler(request: Request):
                     "pedido_simulador", msg.telefono,
                     f"📋 {nome_contato or msg.telefono} enviou um pedido pelo simulador de eletricidade",
                 )
-                await notificar_consultor(
-                    proveedor, msg.telefono, historial=[], mensaje_actual=msg.texto,
-                    motivo="Pedido via simulador de eletricidade (campanha)",
-                )
+                await notificar_pedido_simulador(proveedor, msg.telefono, nome_contato)
                 logger.info(f"Pedido de simulador processado para {msg.telefono}")
                 continue
 
