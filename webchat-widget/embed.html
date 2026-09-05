@@ -1,0 +1,197 @@
+<!--
+  Widget de chat da Reduz+ Energia — cola este bloco completo no site
+  (Hostinger: Definições > Código personalizado > "Antes do </body>", ou
+  editor de HTML da página, mesmo antes de </body>).
+
+  Fala diretamente com o mesmo agente de IA que responde no WhatsApp
+  (config/prompts.yaml), através do endpoint /webchat do servidor em
+  produção. Não precisa de mais nenhum ficheiro nem dependência externa.
+-->
+<div id="reduzmais-chat-bolha" style="position:fixed;bottom:20px;right:20px;width:56px;height:56px;border-radius:50%;background:#1a9c4b;color:#fff;display:flex;align-items:center;justify-content:center;font-size:26px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.25);z-index:999999;">💬</div>
+
+<div id="reduzmais-chat-painel" style="display:none;position:fixed;bottom:88px;right:20px;width:340px;max-width:calc(100vw - 40px);height:460px;max-height:calc(100vh - 120px);background:#fff;border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,.25);z-index:999999;flex-direction:column;overflow:hidden;font-family:Arial,Helvetica,sans-serif;">
+  <div style="background:#1a9c4b;color:#fff;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;">
+    <strong>Reduz+ Energia</strong>
+    <span id="reduzmais-chat-fechar" style="cursor:pointer;font-size:20px;line-height:1;">&times;</span>
+  </div>
+  <div id="reduzmais-chat-mensagens" style="flex:1;overflow-y:auto;padding:12px;font-size:14px;background:#f5f6f7;"></div>
+  <div id="reduzmais-chat-opcoes" style="display:flex;flex-wrap:wrap;gap:6px;padding:0 12px 8px;"></div>
+  <form id="reduzmais-chat-form" style="display:flex;border-top:1px solid #e2e2e2;">
+    <input id="reduzmais-chat-input" type="text" placeholder="Escreva a sua pergunta..." autocomplete="off" style="flex:1;border:none;padding:12px;font-size:14px;outline:none;">
+    <button type="submit" style="background:#1a9c4b;color:#fff;border:none;padding:0 18px;cursor:pointer;font-size:14px;">Enviar</button>
+  </form>
+</div>
+
+<script>
+(function () {
+  // URL do servidor em produção onde corre o agente (Railway)
+  var API_URL = "https://reduz-mais-energia-production.up.railway.app/webchat";
+
+  var bolha = document.getElementById("reduzmais-chat-bolha");
+  var painel = document.getElementById("reduzmais-chat-painel");
+  var fechar = document.getElementById("reduzmais-chat-fechar");
+  var mensagensEl = document.getElementById("reduzmais-chat-mensagens");
+  var opcoesEl = document.getElementById("reduzmais-chat-opcoes");
+  var form = document.getElementById("reduzmais-chat-form");
+  var input = document.getElementById("reduzmais-chat-input");
+
+  var aberto = false;
+  var jaCumprimentou = false;
+
+  function obterSessionId() {
+    try {
+      var id = localStorage.getItem("reduzmais_chat_session");
+      if (!id) {
+        id = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2));
+        localStorage.setItem("reduzmais_chat_session", id);
+      }
+      return id;
+    } catch (e) {
+      // Se o browser bloquear localStorage (ex: janela privada), usa um id só desta sessão
+      return String(Date.now()) + Math.random().toString(16).slice(2);
+    }
+  }
+
+  var sessionId = obterSessionId();
+
+  function adicionarMensagem(texto, autor) {
+    var balao = document.createElement("div");
+    balao.textContent = texto;
+    balao.style.maxWidth = "80%";
+    balao.style.margin = "6px 0";
+    balao.style.padding = "8px 12px";
+    balao.style.borderRadius = "12px";
+    balao.style.lineHeight = "1.4";
+    balao.style.whiteSpace = "pre-wrap";
+    if (autor === "user") {
+      balao.style.marginLeft = "auto";
+      balao.style.background = "#1a9c4b";
+      balao.style.color = "#fff";
+    } else {
+      balao.style.background = "#fff";
+      balao.style.border = "1px solid #e2e2e2";
+      balao.style.color = "#222";
+    }
+    mensagensEl.appendChild(balao);
+    mensagensEl.scrollTop = mensagensEl.scrollHeight;
+  }
+
+  function limparOpcoes() {
+    opcoesEl.innerHTML = "";
+  }
+
+  function mostrarOpcoes(opcoes) {
+    limparOpcoes();
+    (opcoes || []).forEach(function (texto) {
+      var btn = document.createElement("button");
+      btn.textContent = texto;
+      btn.style.border = "1px solid #1a9c4b";
+      btn.style.color = "#1a9c4b";
+      btn.style.background = "#fff";
+      btn.style.borderRadius = "16px";
+      btn.style.padding = "6px 12px";
+      btn.style.fontSize = "13px";
+      btn.style.cursor = "pointer";
+      btn.onclick = function () { enviarMensagem(texto); };
+      opcoesEl.appendChild(btn);
+    });
+  }
+
+  function mostrarLinkBotao(linkBotao) {
+    limparOpcoes();
+    if (!linkBotao) return;
+    var a = document.createElement("a");
+    a.href = linkBotao.url;
+    a.target = "_blank";
+    a.rel = "noopener";
+    a.textContent = linkBotao.texto_botao;
+    a.style.display = "inline-block";
+    a.style.border = "1px solid #1a9c4b";
+    a.style.color = "#1a9c4b";
+    a.style.background = "#fff";
+    a.style.borderRadius = "16px";
+    a.style.padding = "6px 12px";
+    a.style.fontSize = "13px";
+    a.style.textDecoration = "none";
+    opcoesEl.appendChild(a);
+  }
+
+  function mostrarLinksMultiplos(links) {
+    limparOpcoes();
+    (links || []).forEach(function (link) {
+      var a = document.createElement("a");
+      a.href = link.url;
+      a.target = "_blank";
+      a.rel = "noopener";
+      a.textContent = link.texto_botao;
+      a.style.display = "inline-block";
+      a.style.border = "1px solid #1a9c4b";
+      a.style.color = "#1a9c4b";
+      a.style.background = "#fff";
+      a.style.borderRadius = "16px";
+      a.style.padding = "6px 12px";
+      a.style.fontSize = "13px";
+      a.style.textDecoration = "none";
+      opcoesEl.appendChild(a);
+    });
+  }
+
+  function enviarMensagem(texto) {
+    texto = (texto || "").trim();
+    if (!texto) return;
+
+    adicionarMensagem(texto, "user");
+    limparOpcoes();
+    input.value = "";
+
+    var aGuardar = document.createElement("div");
+    aGuardar.id = "reduzmais-chat-a-escrever";
+    aGuardar.textContent = "A escrever...";
+    aGuardar.style.color = "#888";
+    aGuardar.style.fontSize = "13px";
+    aGuardar.style.margin = "6px 0";
+    mensagensEl.appendChild(aGuardar);
+    mensagensEl.scrollTop = mensagensEl.scrollHeight;
+
+    fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: sessionId, mensagem: texto }),
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (dados) {
+        var aEscrever = document.getElementById("reduzmais-chat-a-escrever");
+        if (aEscrever) aEscrever.remove();
+
+        adicionarMensagem(dados.resposta || "Desculpe, não consegui responder agora.", "bot");
+        if (dados.opcoes) mostrarOpcoes(dados.opcoes);
+        else if (dados.link_botao) mostrarLinkBotao(dados.link_botao);
+        else if (dados.links_multiplos) mostrarLinksMultiplos(dados.links_multiplos);
+      })
+      .catch(function () {
+        var aEscrever = document.getElementById("reduzmais-chat-a-escrever");
+        if (aEscrever) aEscrever.remove();
+        adicionarMensagem("Não foi possível ligar ao assistente. Tente novamente dentro de instantes.", "bot");
+      });
+  }
+
+  bolha.addEventListener("click", function () {
+    aberto = !aberto;
+    painel.style.display = aberto ? "flex" : "none";
+    if (aberto && !jaCumprimentou) {
+      jaCumprimentou = true;
+      input.focus();
+    }
+  });
+
+  fechar.addEventListener("click", function () {
+    aberto = false;
+    painel.style.display = "none";
+  });
+
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    enviarMensagem(input.value);
+  });
+})();
+</script>

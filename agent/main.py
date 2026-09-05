@@ -17,6 +17,7 @@ from zoneinfo import ZoneInfo
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import PlainTextResponse
+from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
 from agent.brain import generar_respuesta
@@ -202,6 +203,26 @@ app = FastAPI(
     lifespan=lifespan
 )
 app.include_router(admin_router)
+
+# Origens autorizadas a chamar /webchat (o widget de chat no site da Reduz+
+# Energia) — configurável por variável de ambiente para poder testar noutros
+# domínios (ex: pré-visualização no Hostinger) sem editar código.
+ORIGENS_WEBCHAT = [
+    o.strip() for o in os.getenv(
+        "WEBCHAT_ORIGENS", "https://www.reduzmais.com,https://reduzmais.com"
+    ).split(",") if o.strip()
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ORIGENS_WEBCHAT,
+    allow_methods=["POST"],
+    allow_headers=["*"],
+)
+
+# Prefixo usado para identificar, no mesmo sistema de memória/alertas do
+# WhatsApp, as conversas vindas do widget de chat do site (não têm número de
+# telefone real — cada visitante recebe um id de sessão gerado no browser)
+PREFIXO_SESSAO_WEB = "web:"
 
 
 @app.get("/")
@@ -397,4 +418,63 @@ async def webhook_handler(request: Request):
 
     except Exception as e:
         logger.error(f"Error en webhook: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/webchat")
+async def webchat_handler(request: Request):
+    """
+    Endpoint usado pelo widget de chat embutido no site (reduzmais.com).
+    Cada visitante tem um session_id gerado no browser (guardado em
+    localStorage); usamo-lo como identificador da conversa no mesmo sistema
+    de memória/alertas do WhatsApp, prefixado com "web:" para nunca colidir
+    com um número de telefone real.
+    """
+    try:
+        corpo = await request.json()
+        session_id = str(corpo.get("session_id") or "").strip()
+        mensagem = str(corpo.get("mensagem") or "").strip()
+
+        if not session_id or not mensagem:
+            raise HTTPException(status_code=400, detail="session_id e mensagem são obrigatórios")
+
+        sessao = f"{PREFIXO_SESSAO_WEB}{session_id}"[:50]
+
+        historial = await obtener_historial(sessao)
+        primeira_mensagem = not historial
+
+        respuesta, escalar, agendamento, opcoes, link_botao, motivo_escalada, links_multiplos = \
+            await generar_respuesta(mensagem, historial, sessao, None)
+
+        await guardar_mensaje(sessao, "user", mensagem)
+        await guardar_mensaje(sessao, "assistant", respuesta)
+
+        if primeira_mensagem:
+            await establecer_nome_contato(sessao, "Visitante do site")
+
+        if escalar:
+            await notificar_consultor(proveedor, sessao, historial, mensagem, motivo_escalada)
+            await criar_alerta(
+                "escalada", sessao,
+                f"🔔 Visitante do site pediu para falar com um consultor",
+            )
+
+        if agendamento:
+            await notificar_agendamento(proveedor, agendamento)
+            await criar_alerta(
+                "agendamento", sessao,
+                f"📅 Chamada agendada com visitante do site para {formatar_slot(agendamento['data_hora'])}",
+            )
+
+        return {
+            "resposta": respuesta,
+            "opcoes": opcoes,
+            "link_botao": link_botao,
+            "links_multiplos": links_multiplos,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error en webchat: {e}")
         raise HTTPException(status_code=500, detail=str(e))
