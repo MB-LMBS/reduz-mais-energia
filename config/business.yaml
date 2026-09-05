@@ -6,10 +6,12 @@ negocio:
     particulares. Analisa o perfil de consumo energético do cliente e apresenta
     as melhores opções disponíveis no mercado para reduzir custos energéticos:
     novas propostas de eletricidade, gás natural (escalões 1, 2, 3 e 4),
-    comunidades solares para empresas, e kit solar fotovoltaico (fornecimento
-    e instalação). As instalações com nível de tensão BTN podem ser feitas com
-    investimento próprio do cliente; as instalações com nível de tensão BTE e
-    MT são sem investimento próprio, dependendo de análise de crédito.
+    comunidades solares para empresas, kit solar fotovoltaico (fornecimento
+    e instalação), e soluções de armazenamento de energia com baterias de
+    lítio (residencial, comercial/industrial e utility scale). As instalações
+    com nível de tensão BTN podem ser feitas com investimento próprio do
+    cliente; as instalações com nível de tensão BTE e MT são sem investimento
+    próprio, dependendo de análise de crédito.
   horario: "Segunda a Sexta, 9h às 18h"
   simulador_url: "https://reduz-mais-energia.neocities.org/Reduz+%20Energia/Simuladores%20Energia/Cart%C3%A3o_Simulador"
   whatsapp_numero: "+351 910252869"
@@ -24,6 +26,7 @@ agente:
     - "Tomar pedidos"
     - "Soporte post-venta"
     - "Responder y reenviar mensajes de forma automática"
+    - "Qualificar leads de armazenamento de energia (baterias de lítio)"
 
 metadata:
   creado: "2026-08-05"
