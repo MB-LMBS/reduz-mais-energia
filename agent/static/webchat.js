@@ -12,7 +12,6 @@
 // (config/prompts.yaml), através do endpoint /webchat.
 
 (function () {
-  window.__RM_DEBUG = { iniciado: Date.now() };
   var API_URL = "https://reduz-mais-energia-production.up.railway.app/webchat";
 
   var style = document.createElement("style");
@@ -205,7 +204,6 @@
   }
 
   var sessionId = obterSessionId();
-  window.__RM_DEBUG.sessionId = sessionId;
 
   // Ao carregar a página, tenta restaurar a conversa já guardada no
   // servidor para esta sessão — sem isto, o ecrã "esquecia" a conversa a
@@ -219,29 +217,23 @@
       });
   }
 
-  window.__RM_DEBUG.antesFetch = Date.now();
   pedirHistorico()
-    .catch(function (e1) {
-      window.__RM_DEBUG.erro1 = String(e1);
+    .catch(function () {
       // Uma falha de rede pontual não deve fazer parecer que a conversa
       // nunca existiu — tenta mais uma vez antes de desistir.
       return pedirHistorico();
     })
     .then(function (dados) {
-      window.__RM_DEBUG.dados = dados;
       var mensagens = (dados && dados.mensagens) || [];
       if (mensagens.length > 0) {
         mensagens.forEach(function (m) {
           adicionarMensagem(m.content, m.role === "user" ? "user" : "bot");
         });
-        window.__RM_DEBUG.restaurou = mensagens.length;
         return;
       }
-      window.__RM_DEBUG.restaurou = 0;
       mostrarBoasVindasAutomaticas();
     })
-    .catch(function (e2) {
-      window.__RM_DEBUG.erro2 = String(e2);
+    .catch(function () {
       // As duas tentativas falharam — não há forma de saber se existe
       // conversa anterior, por isso não assume nada: fica só com a bolha,
       // sem abrir sozinho nem apagar o que possa aparecer mais tarde.
