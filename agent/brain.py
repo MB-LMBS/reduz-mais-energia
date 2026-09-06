@@ -23,7 +23,7 @@ from agent.cal_com import (
 from agent.memory import (
     criar_agendamento, guardar_evento_calcom_uid,
     obter_agendamento_ativo_por_telefone, cancelar_agendamento, criar_alerta,
-    marcar_alertas_agendamento_vistos,
+    marcar_alertas_agendamento_vistos, establecer_nome_contato,
 )
 from agent.calendario import (
     criar_evento_chamada as criar_evento_icloud, apagar_evento_chamada as apagar_evento_icloud,
@@ -197,12 +197,12 @@ HERRAMIENTAS = [
                     "description": (
                         "APENAS quando a conversa não vem do WhatsApp (é o chat do site) "
                         "— nesse caso não há um número de telefone associado à conversa, "
-                        "por isso é OBRIGATÓRIO perguntares ao cliente um número de "
-                        "telemóvel válido para contacto (com indicativo do país, ex: "
-                        "+351 9XXXXXXXX) e confirmá-lo antes de marcares a chamada. Nunca "
-                        "chames esta ferramenta sem este número nesse caso — a marcação "
-                        "falha sem ele. Se a conversa já vier do WhatsApp, ignora este "
-                        "campo (o número já é conhecido)."
+                        "por isso é OBRIGATÓRIO perguntares ao cliente o número de "
+                        "telemóvel (basta o número normal, 9 dígitos, sem indicativo — "
+                        "assume-se Portugal automaticamente) e confirmá-lo antes de "
+                        "marcares a chamada. Nunca chames esta ferramenta sem este número "
+                        "nesse caso — a marcação falha sem ele. Se a conversa já vier do "
+                        "WhatsApp, ignora este campo (o número já é conhecido)."
                     ),
                 },
             },
@@ -370,6 +370,27 @@ HERRAMIENTAS = [
             },
             "required": ["mensagem"],
         },
+    },
+    {
+        "name": "guardar_nome_visitante",
+        "description": (
+            "Usa esta ferramenta assim que um cliente do chat do site (nunca do "
+            "WhatsApp, esse já tem nome de perfil automático) disser o seu nome "
+            "próprio pela primeira vez na conversa — mesmo casualmente (ex: "
+            "'Olá, sou o Pedro', 'Chamo-me Ana'). Serve para o nome aparecer no "
+            "painel do consultor em vez de 'Visitante do site'. Chama-a só uma "
+            "vez por conversa, assim que souberes o nome."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "nome": {
+                    "type": "string",
+                    "description": "Nome próprio do cliente, tal como ele se identificou.",
+                },
+            },
+            "required": ["nome"],
+        },
         # Marca o fim do bloco de ferramentas para o cache de prompt da Anthropic —
         # a lista é estática entre pedidos, por isso vale a pena cachear.
         "cache_control": {"type": "ephemeral"},
@@ -489,10 +510,11 @@ async def obtener_contexto_agenda(telefono: str = "") -> str:
     nota_telefone_web = (
         "\nESTE CLIENTE ESTÁ A FALAR PELO CHAT DO SITE, NÃO PELO WHATSAPP — não há "
         "nenhum número de telefone associado a esta conversa. Antes de chamares "
-        "agendar_chamada tens de perguntar e confirmar um número de telemóvel "
-        "válido para contacto (com indicativo do país, ex: +351 9XXXXXXXX), e "
-        "preencher o campo telefone_contacto com esse número. Nunca marques sem "
-        "isso — a marcação falha sempre sem um telefone real.\n"
+        "agendar_chamada tens de perguntar e confirmar o número de telemóvel do "
+        "cliente (basta o número normal, 9 dígitos, sem indicativo — não "
+        "compliques pedindo o indicativo do país), e preencher o campo "
+        "telefone_contacto com esse número. Nunca marques sem isso — a marcação "
+        "falha sempre sem um telefone real.\n"
         if telefono.startswith("web:") else ""
     )
 
@@ -574,7 +596,15 @@ async def montar_system_blocks(
     base = config.get("system_prompt", "Eres un asistente útil. Responde en español.")
     contexto_agenda = await obtener_contexto_agenda(telefono)
     contexto_cliente = obtener_contexto_cliente(nome_contato, primeira_mensagem)
-    contexto_dinamico = obtener_contexto_temporal() + contexto_cliente + contexto_agenda
+    contexto_canal = (
+        "\n\n## Formatação (chat do site)\n"
+        "Esta conversa é pelo chat do site, não pelo WhatsApp — o texto aparece "
+        "tal como escreves, sem interpretar formatação. NUNCA uses asteriscos "
+        "para negrito (ex: **texto**) nem outra marcação — escreve em texto "
+        "simples, com frases e parágrafos curtos e bem espaçados."
+        if telefono.startswith("web:") else ""
+    )
+    contexto_dinamico = obtener_contexto_temporal() + contexto_cliente + contexto_agenda + contexto_canal
     return [
         {"type": "text", "text": base, "cache_control": {"type": "ephemeral"}},
         {"type": "text", "text": contexto_dinamico},
@@ -611,20 +641,26 @@ async def _processar_agendamento(entrada: dict, telefono: str) -> tuple[str, dic
     # telefone real associado — sem um número válido a marcação no Cal.com
     # falha sempre (a pergunta de telefone do evento fica por responder),
     # por isso é obrigatório tê-lo antes de sequer tentar marcar.
-    if telefono.startswith("web:") and len(re.sub(r"\D", "", telefone_contacto)) < 9:
+    digitos_contacto = re.sub(r"\D", "", telefone_contacto)
+    if telefono.startswith("web:") and len(digitos_contacto) < 9:
         return (
             "Não foi possível marcar: falta um número de telemóvel válido para "
             "contacto (esta conversa é pelo chat do site, não pelo WhatsApp). "
-            "Pergunta ao cliente o número de telemóvel (com indicativo do país) "
-            "e volta a chamar agendar_chamada com telefone_contacto preenchido.",
+            "Pergunta ao cliente o número de telemóvel e volta a chamar "
+            "agendar_chamada com telefone_contacto preenchido.",
             None,
         )
-    telefone_calcom = telefone_contacto if telefone.startswith("web:") else telefono
+    # Números portugueses normais têm 9 dígitos — se o cliente não indicou o
+    # indicativo do país, assume-se Portugal (351) automaticamente, para não
+    # ter de se pedir isso ao cliente.
+    if len(digitos_contacto) == 9:
+        digitos_contacto = f"351{digitos_contacto}"
+    telefone_calcom = digitos_contacto if telefono.startswith("web:") else telefono
     if telefone.startswith("web:") and telefone_contacto:
         # O telefone real não fica visível em mais lado nenhum para esta
         # conversa (o identificador é só um id de sessão do browser) — sem
         # isto o consultor não teria como ligar de volta ao cliente.
-        informacao = f"Telefone de contacto: {telefone_contacto}" + (f"\n{informacao}" if informacao else "")
+        informacao = f"Telefone de contacto: +{telefone_calcom}" + (f"\n{informacao}" if informacao else "")
 
     e_agenda_pessoal = bool(NUMERO_CONSULTOR) and telefono == NUMERO_CONSULTOR
     tipo_evento = (entrada.get("tipo_evento") or "").strip()
@@ -1003,6 +1039,13 @@ async def generar_respuesta(
                     texto_curto_circuito = mensagem_redes
                     links_multiplos = REDES_SOCIAIS
                     resultado_texto = "Botões das redes sociais mostrados ao cliente."
+                elif tool_use.name == "guardar_nome_visitante":
+                    nome_visitante = (tool_use.input.get("nome") or "").strip()
+                    if nome_visitante:
+                        await establecer_nome_contato(telefono, nome_visitante)
+                        resultado_texto = "Nome guardado."
+                    else:
+                        resultado_texto = "Nome vazio — não foi guardado."
                 else:
                     resultado_texto = "Ferramenta desconhecida."
 

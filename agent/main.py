@@ -18,6 +18,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 
 from agent.brain import generar_respuesta
@@ -203,6 +204,12 @@ app = FastAPI(
     lifespan=lifespan
 )
 app.include_router(admin_router)
+
+# Ficheiros estáticos (ex: agent/static/webchat.js) — o widget de chat do
+# site inclui este script com uma única linha, para que qualquer ajuste
+# (cores, espaçamento, texto) só precise de mudar aqui, sem editar o HTML
+# de cada página do site.
+app.mount("/static", StaticFiles(directory="agent/static"), name="static")
 
 # Origens autorizadas a chamar /webchat (o widget de chat no site da Reduz+
 # Energia) — configurável por variável de ambiente para poder testar noutros
@@ -419,6 +426,25 @@ async def webhook_handler(request: Request):
     except Exception as e:
         logger.error(f"Error en webhook: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/webchat/historico")
+async def webchat_historico(session_id: str):
+    """
+    Devolve o histórico já guardado de uma sessão do widget do site — usado
+    para restaurar a conversa visível quando o visitante recarrega a página
+    (o servidor já se lembra de tudo; sem isto, o ecrã "esquecia" mas o
+    bot continuava a conversa por trás, confundindo o visitante).
+    """
+    sessao = f"{PREFIXO_SESSAO_WEB}{session_id.strip()}"[:50]
+    historial = await obtener_historial(sessao)
+    return {
+        "mensagens": [
+            {"role": "assistant" if m["role"] == "humano" else m["role"], "content": m["content"]}
+            for m in historial
+            if m.get("tipo", "texto") == "texto" and m["content"]
+        ]
+    }
 
 
 @app.post("/webchat")
