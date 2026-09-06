@@ -1024,8 +1024,58 @@ async def generar_respuesta(
         # Ciclo de tool-use: el modelo puede activar una o varias herramientas
         # antes de dar la respuesta final al cliente (con un límite de seguridad)
         intentos = 0
+        vazias_seguidas = 0
         texto_curto_circuito = None
-        while response.stop_reason == "tool_use" and intentos < 4:
+        NUDGE_RESPOSTA_VAZIA = (
+            "[A tua resposta anterior ficou vazia. Continua a conversa agora "
+            "mesmo: dá o próximo passo real (ex: pede confirmação se faltar, "
+            "ou confirma o que ficou tratado) — nunca deixes a resposta em "
+            "branco.]"
+        )
+        while True:
+            if response.stop_reason != "tool_use":
+                texto_pronto = next((b.text for b in response.content if b.type == "text"), "").strip()
+                if texto_pronto:
+                    texto = texto_pronto
+                    break
+                # Acontece de vez em quando o modelo terminar sem escrever
+                # texto nenhum (ex: depois de guardar_nome_visitante,
+                # "esquece-se" de continuar para o passo seguinte, como pedir
+                # confirmação). Em vez de mostrar logo uma mensagem genérica,
+                # pede-se mais uma vez ao modelo para continuar — o pedido
+                # volta a passar por este mesmo ciclo, por isso se a
+                # continuação for outra ferramenta (ex: oferecer_opcoes para
+                # confirmar), é tratada normalmente como qualquer outra.
+                if vazias_seguidas >= 2:
+                    logger.warning("Resposta vazia mesmo depois de pedir para continuar — a usar mensagem de recurso")
+                    texto = (
+                        "Recebi a sua mensagem e já tratei do que pediu. Se precisar de "
+                        "mais alguma coisa, ou quiser confirmar algum detalhe, diga-me."
+                    )
+                    break
+                vazias_seguidas += 1
+                logger.warning("Resposta de texto vazia — a pedir ao modelo para continuar")
+                mensajes.append({"role": "assistant", "content": response.content})
+                mensajes.append({"role": "user", "content": NUDGE_RESPOSTA_VAZIA})
+                response = await client.messages.create(
+                    model="claude-sonnet-4-6",
+                    max_tokens=1024,
+                    system=system_blocks,
+                    tools=HERRAMIENTAS,
+                    messages=mensajes,
+                )
+                continue
+
+            if intentos >= 4:
+                # Limite de segurança do ciclo de ferramentas atingido sem
+                # texto nenhum — não há mais nada a fazer além de desistir
+                # com a mensagem de recurso.
+                texto = (
+                    "Recebi a sua mensagem e já tratei do que pediu. Se precisar de "
+                    "mais alguma coisa, ou quiser confirmar algum detalhe, diga-me."
+                )
+                break
+
             intentos += 1
             tool_blocks = [b for b in response.content if b.type == "tool_use"]
             mensajes.append({"role": "assistant", "content": response.content})
@@ -1132,17 +1182,6 @@ async def generar_respuesta(
                 messages=mensajes
             )
 
-        texto = next((b.text for b in response.content if b.type == "text"), "").strip()
-        if not texto:
-            # Acontece raramente quando o modelo termina o ciclo de ferramentas
-            # sem escrever texto nenhum — sem isto o cliente via uma resposta
-            # em branco (o frontend mostra "Desculpe, não consegui responder
-            # agora."), sem perceber que o pedido pode já ter sido processado.
-            logger.warning("Resposta de texto vazia após ciclo de ferramentas — a usar mensagem de recurso")
-            texto = (
-                "Recebi a sua mensagem e já tratei do que pediu. Se precisar de "
-                "mais alguma coisa, ou quiser confirmar algum detalhe, diga-me."
-            )
         logger.info(
             f"Respuesta generada ({response.usage.input_tokens} in / {response.usage.output_tokens} out / "
             f"{response.usage.cache_read_input_tokens or 0} cache_read / "
