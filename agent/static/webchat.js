@@ -209,8 +209,20 @@
   // servidor para esta sessão — sem isto, o ecrã "esquecia" a conversa a
   // cada refresh, mas o bot (no servidor) continuava a lembrar-se de tudo,
   // o que confundia o visitante.
-  fetch(HISTORICO_URL + "?session_id=" + encodeURIComponent(sessionId))
-    .then(function (r) { return r.json(); })
+  function pedirHistorico() {
+    return fetch(HISTORICO_URL + "?session_id=" + encodeURIComponent(sessionId))
+      .then(function (r) {
+        if (!r.ok) throw new Error("historico HTTP " + r.status);
+        return r.json();
+      });
+  }
+
+  pedirHistorico()
+    .catch(function () {
+      // Uma falha de rede pontual não deve fazer parecer que a conversa
+      // nunca existiu — tenta mais uma vez antes de desistir.
+      return pedirHistorico();
+    })
     .then(function (dados) {
       var mensagens = (dados && dados.mensagens) || [];
       if (mensagens.length > 0) {
@@ -222,7 +234,9 @@
       mostrarBoasVindasAutomaticas();
     })
     .catch(function () {
-      mostrarBoasVindasAutomaticas();
+      // As duas tentativas falharam — não há forma de saber se existe
+      // conversa anterior, por isso não assume nada: fica só com a bolha,
+      // sem abrir sozinho nem apagar o que possa aparecer mais tarde.
     });
 
   function mostrarBoasVindasAutomaticas() {

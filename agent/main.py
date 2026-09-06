@@ -16,9 +16,8 @@ from datetime import datetime, time
 from zoneinfo import ZoneInfo
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 
 from agent.brain import generar_respuesta
@@ -205,11 +204,23 @@ app = FastAPI(
 )
 app.include_router(admin_router)
 
-# Ficheiros estáticos (ex: agent/static/webchat.js) — o widget de chat do
-# site inclui este script com uma única linha, para que qualquer ajuste
-# (cores, espaçamento, texto) só precise de mudar aqui, sem editar o HTML
-# de cada página do site.
-app.mount("/static", StaticFiles(directory="agent/static"), name="static")
+@app.get("/static/webchat.js")
+async def webchat_js():
+    """
+    Widget de chat do site — o site inclui este script com uma única
+    linha, para que qualquer ajuste (cores, espaçamento, texto) só
+    precise de mudar aqui, sem editar o HTML de cada página do site.
+
+    "no-cache" (não "no-store") força o browser a revalidar com o
+    servidor antes de reutilizar a cópia em cache — continua rápido
+    (um 304 sem corpo se não mudou), mas evita ficar preso a uma versão
+    antiga do script depois de um deploy.
+    """
+    return FileResponse(
+        "agent/static/webchat.js",
+        media_type="application/javascript",
+        headers={"Cache-Control": "no-cache, must-revalidate"},
+    )
 
 # Origens autorizadas a chamar /webchat (o widget de chat no site da Reduz+
 # Energia) — configurável por variável de ambiente para poder testar noutros
