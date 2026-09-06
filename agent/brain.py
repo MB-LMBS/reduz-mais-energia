@@ -669,7 +669,7 @@ async def _processar_agendamento(entrada: dict, telefono: str) -> tuple[str, dic
     if len(digitos_contacto) == 9:
         digitos_contacto = f"351{digitos_contacto}"
     telefone_calcom = digitos_contacto if telefono.startswith("web:") else telefono
-    if telefone.startswith("web:") and telefone_contacto:
+    if telefono.startswith("web:") and telefone_contacto:
         # O telefone real não fica visível em mais lado nenhum para esta
         # conversa (o identificador é só um id de sessão do browser) — sem
         # isto o consultor não teria como ligar de volta ao cliente.
