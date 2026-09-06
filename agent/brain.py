@@ -9,6 +9,7 @@ y genera respuestas usando la API de Anthropic Claude.
 import os
 import re
 import yaml
+import difflib
 import logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -424,6 +425,50 @@ def _truncar_opcao(texto: str, limite: int) -> str:
     if ultimo_espaco > 0:
         cortado = cortado[:ultimo_espaco]
     return cortado.rstrip()
+
+
+# Categorias de assunto para a deteção de perguntas repetidas — duas
+# perguntas só contam como "o mesmo assunto" se partilharem uma destas
+# categorias (evita confundir, ex: "que DIA prefere" com "que HORA prefere",
+# que têm texto parecido mas são perguntas legitimamente diferentes).
+_CATEGORIAS_PERGUNTA = [
+    ("hora", "horári"),
+    ("dia", "data"),
+    ("nome",),
+    ("telefone", "telemóvel", "número"),
+    ("confirma",),
+]
+
+
+def _pergunta_repetida(pergunta: str, historial: list[dict]) -> bool:
+    """
+    Deteta se uma nova pergunta de oferecer_opcoes é essencialmente a
+    mesma que a última mensagem do bot já na conversa — sinal de que o
+    modelo "esqueceu" que o cliente já respondeu e está a repetir-se
+    (ex: perguntar a hora outra vez depois de o cliente já ter escolhido).
+    Como o histórico passado a generar_respuesta é o de antes da mensagem
+    atual do cliente, a última entrada é sempre a resposta anterior do bot.
+    """
+    if not historial:
+        return False
+    ultima = historial[-1]
+    if ultima.get("role") not in ("assistant", "humano"):
+        return False
+    anterior = (ultima.get("content") or "").strip()
+    # Mensagens longas (parágrafos explicativos) não são o tipo de pergunta
+    # curta de botões que estamos a tentar apanhar aqui — comparar essas só
+    # daria falsos positivos.
+    if not anterior or len(anterior) > 200:
+        return False
+    pergunta_min, anterior_min = pergunta.lower(), anterior.lower()
+    mesmo_assunto = any(
+        any(p in pergunta_min for p in palavras) and any(p in anterior_min for p in palavras)
+        for palavras in _CATEGORIAS_PERGUNTA
+    )
+    if not mesmo_assunto:
+        return False
+    ratio = difflib.SequenceMatcher(None, pergunta_min, anterior_min).ratio()
+    return ratio > 0.4
 
 
 def cargar_config_prompts() -> dict:
@@ -1102,12 +1147,25 @@ async def generar_respuesta(
                         _truncar_opcao(str(o).strip(), 28)
                         for o in (tool_use.input.get("opcoes") or []) if str(o).strip()
                     ][:3]
-                    if pergunta and len(opcoes_validas) >= 2:
+                    if not pergunta or len(opcoes_validas) < 2:
+                        resultado_texto = "Pedido inválido (falta pergunta ou 2-3 opções) — responde em texto normal."
+                    elif _pergunta_repetida(pergunta, historial):
+                        # O cliente já respondeu à última pergunta do bot (é a
+                        # mensagem atual dele) — repetir a mesma pergunta iria
+                        # confundi-lo. Bloqueia o curto-circuito e devolve uma
+                        # instrução corretiva, para o modelo avançar em vez de
+                        # se repetir.
+                        logger.warning(f"Pergunta repetida detetada e bloqueada: {pergunta!r}")
+                        resultado_texto = (
+                            "Já fizeste esta pergunta (ou muito parecida) e o cliente "
+                            "acabou de responder a ela na mensagem dele. NÃO a repitas — "
+                            "usa a resposta que ele já deu e avança já para o passo "
+                            "seguinte (ex: pede o que ainda falta, ou confirma/agenda)."
+                        )
+                    else:
                         texto_curto_circuito = pergunta
                         opcoes = opcoes_validas
                         resultado_texto = "Opções mostradas ao cliente como botões."
-                    else:
-                        resultado_texto = "Pedido inválido (falta pergunta ou 2-3 opções) — responde em texto normal."
                 elif tool_use.name == "enviar_link_simulador":
                     mensagem_link = (tool_use.input.get("mensagem") or "").strip() or \
                         "Veja as opções e campanhas disponíveis:"
