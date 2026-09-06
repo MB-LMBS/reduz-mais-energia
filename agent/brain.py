@@ -7,6 +7,7 @@ y genera respuestas usando la API de Anthropic Claude.
 """
 
 import os
+import re
 import yaml
 import logging
 from datetime import datetime
@@ -189,6 +190,19 @@ HERRAMIENTAS = [
                     "description": (
                         "Só para a agenda pessoal do consultor (nunca para clientes): "
                         "números de telefone de outras pessoas a convocar, se houver."
+                    ),
+                },
+                "telefone_contacto": {
+                    "type": "string",
+                    "description": (
+                        "APENAS quando a conversa não vem do WhatsApp (é o chat do site) "
+                        "— nesse caso não há um número de telefone associado à conversa, "
+                        "por isso é OBRIGATÓRIO perguntares ao cliente um número de "
+                        "telemóvel válido para contacto (com indicativo do país, ex: "
+                        "+351 9XXXXXXXX) e confirmá-lo antes de marcares a chamada. Nunca "
+                        "chames esta ferramenta sem este número nesse caso — a marcação "
+                        "falha sem ele. Se a conversa já vier do WhatsApp, ignora este "
+                        "campo (o número já é conhecido)."
                     ),
                 },
             },
@@ -472,8 +486,19 @@ async def obtener_contexto_agenda(telefono: str = "") -> str:
         linhas.append(f"- {nome_dia}, {dia.strftime('%d/%m')} — horas livres: {horas}")
     bloco_dias = "\n".join(linhas)
 
+    nota_telefone_web = (
+        "\nESTE CLIENTE ESTÁ A FALAR PELO CHAT DO SITE, NÃO PELO WHATSAPP — não há "
+        "nenhum número de telefone associado a esta conversa. Antes de chamares "
+        "agendar_chamada tens de perguntar e confirmar um número de telemóvel "
+        "válido para contacto (com indicativo do país, ex: +351 9XXXXXXXX), e "
+        "preencher o campo telefone_contacto com esse número. Nunca marques sem "
+        "isso — a marcação falha sempre sem um telefone real.\n"
+        if telefono.startswith("web:") else ""
+    )
+
     return (
         "\n\n## Agendamento de chamadas\n"
+        f"{nota_telefone_web}"
         "Não ofereças uma chamada logo na primeira mensagem nem em resposta a "
         "um simples cumprimento (ex: 'boa noite', 'olá', 'tudo bem?') — "
         "responde ao cumprimento com naturalidade e percebe primeiro o que o "
@@ -580,6 +605,26 @@ async def _processar_agendamento(entrada: dict, telefono: str) -> tuple[str, dic
     hora = (entrada.get("hora") or "").strip()
     nome = (entrada.get("nome") or "").strip()
     informacao = (entrada.get("informacao") or "").strip()
+    telefone_contacto = re.sub(r"[^\d+]", "", entrada.get("telefone_contacto") or "")
+
+    # Conversas do chat do site (telefono="web:...") não têm um número de
+    # telefone real associado — sem um número válido a marcação no Cal.com
+    # falha sempre (a pergunta de telefone do evento fica por responder),
+    # por isso é obrigatório tê-lo antes de sequer tentar marcar.
+    if telefono.startswith("web:") and len(re.sub(r"\D", "", telefone_contacto)) < 9:
+        return (
+            "Não foi possível marcar: falta um número de telemóvel válido para "
+            "contacto (esta conversa é pelo chat do site, não pelo WhatsApp). "
+            "Pergunta ao cliente o número de telemóvel (com indicativo do país) "
+            "e volta a chamar agendar_chamada com telefone_contacto preenchido.",
+            None,
+        )
+    telefone_calcom = telefone_contacto if telefone.startswith("web:") else telefono
+    if telefone.startswith("web:") and telefone_contacto:
+        # O telefone real não fica visível em mais lado nenhum para esta
+        # conversa (o identificador é só um id de sessão do browser) — sem
+        # isto o consultor não teria como ligar de volta ao cliente.
+        informacao = f"Telefone de contacto: {telefone_contacto}" + (f"\n{informacao}" if informacao else "")
 
     e_agenda_pessoal = bool(NUMERO_CONSULTOR) and telefono == NUMERO_CONSULTOR
     tipo_evento = (entrada.get("tipo_evento") or "").strip()
@@ -687,7 +732,7 @@ async def _processar_agendamento(entrada: dict, telefono: str) -> tuple[str, dic
 
     data_hora_tz = data_hora.replace(tzinfo=ZoneInfo("Europe/Lisbon"))
     reserva = await criar_reserva(
-        data_hora_tz, nome, telefone=telefono, informacao=informacao,
+        data_hora_tz, nome, telefone=telefone_calcom, informacao=informacao,
         sem_restricoes=e_agenda_pessoal, duracao_minutos=duracao_minutos,
     )
     if reserva is None:
