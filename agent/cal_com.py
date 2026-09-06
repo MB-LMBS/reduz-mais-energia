@@ -123,23 +123,29 @@ async def criar_reserva(
     if not calcom_configurado():
         return None
 
+    telefone_formatado = f"+{telefone}" if not telefone.startswith("+") else telefone
+
     corpo = {
         "start": inicio.astimezone(ZoneInfo("UTC")).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "attendee": {
             "name": nome_cliente or telefone,
-            # O evento no Cal.com foi configurado para exigir telefone em vez de
-            # email (os clientes só têm WhatsApp) — ver "Booking questions" no
-            # próprio Cal.com
             "timeZone": "Europe/Lisbon",
-            "phoneNumber": f"+{telefone}" if not telefone.startswith("+") else telefone,
+            "phoneNumber": telefone_formatado,
             "language": "pt",
         },
         "eventTypeSlug": CALCOM_EVENT_SLUG,
         "username": CALCOM_USERNAME,
         "metadata": {"telefone": telefone, "origem": "whatsapp"},
+        # O evento no Cal.com tem uma "booking question" própria (não a
+        # localização "attendeePhone") para exigir telefone em vez de email —
+        # essa pergunta tem de vir respondida aqui em bookingFieldsResponses,
+        # com a chave exata "attendeePhoneNumber", senão o Cal.com rejeita a
+        # marcação com "responses - {attendeePhoneNumber}invalid_number"
+        # mesmo com attendee.phoneNumber preenchido.
+        "bookingFieldsResponses": {"attendeePhoneNumber": telefone_formatado},
     }
     if informacao:
-        corpo["bookingFieldsResponses"] = {"notes": informacao}
+        corpo["bookingFieldsResponses"]["notes"] = informacao
     if sem_restricoes:
         corpo["allowBookingOutOfBounds"] = True
         corpo["skipBookingLimits"] = True
