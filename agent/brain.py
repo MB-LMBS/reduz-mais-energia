@@ -1043,6 +1043,7 @@ async def generar_respuesta(
                     nome_visitante = (tool_use.input.get("nome") or "").strip()
                     if nome_visitante:
                         await establecer_nome_contato(telefono, nome_visitante)
+                        logger.info(f"Nome do visitante guardado: {telefono} -> {nome_visitante}")
                         resultado_texto = "Nome guardado."
                     else:
                         resultado_texto = "Nome vazio — não foi guardado."
