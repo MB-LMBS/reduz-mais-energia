@@ -358,14 +358,24 @@ HERRAMIENTAS = [
             "Energia no LinkedIn e no Facebook — normalmente numa pausa "
             "natural da conversa, ex: depois de agradeceres ao cliente ou "
             "no fecho da conversa. Mostra dois botões clicáveis (um para "
-            "cada rede social) em vez de escreveres os links em texto."
+            "cada rede social) em vez de escreveres os links em texto.\n"
+            "ATENÇÃO: se acabaste de marcar uma chamada com agendar_chamada "
+            "nesta mesma resposta, o texto desta ferramenta é a ÚNICA "
+            "mensagem que o cliente vai ver — por isso o campo mensagem tem "
+            "de incluir também a confirmação da marcação (dia e hora), não "
+            "só o agradecimento. Nunca uses as duas ferramentas na mesma "
+            "resposta sem confirmares a marcação no texto desta."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
                 "mensagem": {
                     "type": "string",
-                    "description": "Texto curto de agradecimento/despedida a acompanhar os botões.",
+                    "description": (
+                        "Texto a acompanhar os botões — agradecimento/despedida, e "
+                        "se aplicável (marcação feita nesta mesma resposta) a "
+                        "confirmação clara do dia e hora marcados."
+                    ),
                 },
             },
             "required": ["mensagem"],
@@ -1090,6 +1100,19 @@ async def generar_respuesta(
                     "tool_use_id": tool_use.id,
                     "content": resultado_texto,
                 })
+
+            # Se a chamada foi marcada nesta mesma resposta e o modelo também
+            # recomendou as redes sociais, a mensagem das redes sociais vai
+            # ser a única que o cliente vê — se ela não confirmar já o
+            # dia/hora (o modelo às vezes esquece-se), garante isso aqui em
+            # código, para o cliente nunca ficar sem confirmação da marcação.
+            if agendamento and links_multiplos and agendamento.get("data_hora"):
+                confirmacao_slot = formatar_slot(agendamento["data_hora"])
+                if confirmacao_slot not in (texto_curto_circuito or ""):
+                    texto_curto_circuito = (
+                        f"A sua chamada está confirmada para {confirmacao_slot}. "
+                        f"{texto_curto_circuito or ''}"
+                    ).strip()
 
             # Se as opções ou algum link foram mostrados com sucesso, essa é
             # a mensagem final — não pedimos mais um texto ao modelo por cima
