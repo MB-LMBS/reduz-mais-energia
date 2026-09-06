@@ -154,9 +154,25 @@
     wrap.classList.add("rm-sem-pulso");
   }
 
-  function abrirComBoasVindas() {
+  // Enquanto o painel está com display:none (escondido), o browser não
+  // calcula a altura do conteúdo — por isso scrollTop=scrollHeight não
+  // tem efeito nenhum nessa altura. Chamar isto sempre que o painel abre
+  // (depois do display passar a "flex") garante que a última mensagem
+  // fica sempre visível, sem o visitante ter de arrastar a barra.
+  function rolarParaFim() {
+    requestAnimationFrame(function () {
+      mensagensEl.scrollTop = mensagensEl.scrollHeight;
+    });
+  }
+
+  function abrirPainel() {
     aberto = true;
     painel.style.display = "flex";
+    rolarParaFim();
+  }
+
+  function abrirComBoasVindas() {
+    abrirPainel();
     pararPulso();
     adicionarMensagem(MENSAGEM_BOAS_VINDAS, "bot");
   }
@@ -225,6 +241,7 @@
     balao.className = "rm-balao " + (autor === "user" ? "user" : "bot");
     mensagensEl.appendChild(balao);
     mensagensEl.scrollTop = mensagensEl.scrollHeight;
+    rolarParaFim();
   }
 
   function limparOpcoes() {
@@ -308,10 +325,12 @@
   bolha.addEventListener("click", function () {
     if (!aberto && !mensagensEl.hasChildNodes()) {
       abrirComBoasVindas();
-    } else {
-      aberto = !aberto;
-      painel.style.display = aberto ? "flex" : "none";
+    } else if (!aberto) {
+      abrirPainel();
       pararPulso();
+    } else {
+      aberto = false;
+      painel.style.display = "none";
     }
     if (aberto) input.focus();
   });
