@@ -597,11 +597,18 @@ async def montar_system_blocks(
     contexto_agenda = await obtener_contexto_agenda(telefono)
     contexto_cliente = obtener_contexto_cliente(nome_contato, primeira_mensagem)
     contexto_canal = (
-        "\n\n## Formatação (chat do site)\n"
-        "Esta conversa é pelo chat do site, não pelo WhatsApp — o texto aparece "
-        "tal como escreves, sem interpretar formatação. NUNCA uses asteriscos "
-        "para negrito (ex: **texto**) nem outra marcação — escreve em texto "
-        "simples, com frases e parágrafos curtos e bem espaçados."
+        "\n\n## Chat do site (não é WhatsApp)\n"
+        "Esta conversa é pelo chat do site, não pelo WhatsApp. Duas coisas "
+        "importantes por causa disso:\n"
+        "1. O texto aparece tal como escreves, sem interpretar formatação — "
+        "NUNCA uses asteriscos para negrito (ex: **texto**) nem outra marcação. "
+        "Escreve em texto simples, com frases e parágrafos curtos e bem "
+        "espaçados.\n"
+        "2. Assim que o cliente disser o nome dele — mesmo casualmente, "
+        "\"sou o Pedro\", \"chamo-me Ana\" — chama IMEDIATAMENTE a ferramenta "
+        "guardar_nome_visitante com esse nome, na mesma resposta em que "
+        "respondes ao resto da mensagem. Sem isto o consultor só vê "
+        "\"Visitante do site\" no painel."
         if telefono.startswith("web:") else ""
     )
     contexto_dinamico = obtener_contexto_temporal() + contexto_cliente + contexto_agenda + contexto_canal
