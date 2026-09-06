@@ -401,6 +401,21 @@ DIAS_SEMANA = ["segunda-feira", "terça-feira", "quarta-feira", "quinta-feira",
                "sexta-feira", "sábado", "domingo"]
 
 
+def _truncar_opcao(texto: str, limite: int) -> str:
+    """
+    Corta o texto de um botão de opção no limite de caracteres, mas sempre
+    numa palavra inteira — um corte a meio de palavra (ex: "...com algu")
+    fica claramente partido e confuso para o cliente.
+    """
+    if len(texto) <= limite:
+        return texto
+    cortado = texto[:limite]
+    ultimo_espaco = cortado.rfind(" ")
+    if ultimo_espaco > 0:
+        cortado = cortado[:ultimo_espaco]
+    return cortado.rstrip()
+
+
 def cargar_config_prompts() -> dict:
     """Lee toda la configuración desde config/prompts.yaml."""
     try:
@@ -1024,7 +1039,8 @@ async def generar_respuesta(
                 elif tool_use.name == "oferecer_opcoes":
                     pergunta = (tool_use.input.get("pergunta") or "").strip()
                     opcoes_validas = [
-                        str(o).strip()[:20] for o in (tool_use.input.get("opcoes") or []) if str(o).strip()
+                        _truncar_opcao(str(o).strip(), 28)
+                        for o in (tool_use.input.get("opcoes") or []) if str(o).strip()
                     ][:3]
                     if pergunta and len(opcoes_validas) >= 2:
                         texto_curto_circuito = pergunta
