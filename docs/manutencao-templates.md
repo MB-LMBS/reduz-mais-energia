@@ -1415,3 +1415,82 @@ templates.
    registo de 17/08) — sem novidades hoje.
 3. Nenhum trabalho pendente do bug do campo `example` — todos os templates
    ativos continuam a incluí-lo.
+
+---
+
+## 17/09/2026
+
+### Estado encontrado no início desta execução
+
+`META_ACCESS_TOKEN` e `META_WABA_ID` disponíveis no ambiente. Listagem
+completa via GET `message_templates` (fields
+`name,status,rejected_reason,components,language`) — **43 templates**
+`mensagem_*`, três a mais do que no registo de 16/09 (40):
+
+- **Trabalho pendente de 17/08 (prioridade máxima do enunciado da tarefa) —
+  continua totalmente resolvido**: `mensagem_manha_13-24`, `mensagem_fimdia_21-30`
+  e `mensagem_sexta_13-18` — todos **APPROVED**, todos com `example` confirmado.
+- **Novidade desta execução**: `agent/motivacao.py` gera e submete sozinho um
+  novo lote quando um ciclo de rotação se esgota (`_gerar_e_submeter_novo_lote`,
+  chamado a partir de `enviar_mensagens_periodo`). Entre 16/09 e hoje isso
+  aconteceu para o tipo `fim_dia` — apareceram `mensagem_fimdia_31`,
+  `mensagem_fimdia_33` e `mensagem_fimdia_34`, todos **APPROVED**, todos com
+  `example.body_text` presente (verificado componente a componente) e texto em
+  português correto (acentuação revista, sem confusões "e"/"é"). **Falta
+  `mensagem_fimdia_32`** — não existe na Meta com nenhum estado (nem
+  `REJECTED`, nem `PENDING`); o lote pede 4 mensagens e `proximo_indice_livre()`
+  reserva os 4 números antes de submeter uma a uma, por isso o mais provável é
+  que a submissão do índice `32` tenha falhado silenciosamente do lado da Meta
+  (ex: erro de rede/timeout nesse pedido em concreto) sem gerar registo
+  consultável a partir daqui — `criar_template()` só regista o erro no log da
+  aplicação em produção, ao qual não tenho acesso nesta execução. **Sem
+  impacto funcional**: a reserva de `fim_dia` cresceu de 10 para 13 templates
+  aprovados (`21-31`, `33`, `34`) e `_obter_pool()` consulta sempre a Meta
+  diretamente, ignorando o número em falta. Não é um bug do `example` (novo
+  padrão desde 17/08) nem uma acentuação incorreta — não requer correção,
+  só registo para consciência futura. Não vou tentar recriar manualmente o
+  índice `32`: o próximo lote automático (`proximo_indice_livre`) já avança a
+  partir do maior número existente (`34`), pelo que o ciclo continua saudável
+  sem intervenção.
+- `mensagem_sexta_urgente_01` — continua **REJECTED** (`INVALID_FORMAT`, sem
+  `example`, texto ainda com "dedicacao"/"Ate" por corrigir). Confirmei de
+  novo, por pesquisa de texto ("urgente") em todo o repositório, que não
+  está referenciado em nenhum código. Mantida a mesma cautela dos registos
+  anteriores — não corrigido nem apagado.
+- Todos os outros templates ativos (`manha_13-35`, 23; `sexta_13-18`, 6) —
+  **APPROVED**, sem alterações face a 16/09.
+
+### Trabalho realizado
+
+**Verificação de rotina (ponto 4 da tarefa):** revi com cuidado, com olhos
+frescos, o texto completo dos 42 templates `APPROVED` (os 39 já existentes
+em 16/09 mais os 3 novos `fimdia_31/33/34`) — acentuação, cedilhas,
+confusão "e"/"é". Não encontrei nenhum erro de português nesta execução —
+todos os textos estão corretos, incluindo os 3 novos.
+
+Comparei `POOL_RESERVA` em `agent/motivacao.py` com a listagem atual da
+Meta: o fallback estático de `fim_dia` ainda aponta só para `21-30` (a
+constante só é usada se a consulta à Meta falhar, `_obter_pool()` usa
+sempre a Meta em primeiro lugar) — os novos `31`, `33`, `34` não estão
+incluídos nesse fallback. Isto não é um bug (o fallback continua 100%
+válido, todos os nomes que lista existem e estão `APPROVED`), só ficaria
+com 3 opções a menos na reserva de segurança se a Meta estivesse em baixo
+num dia em que o `_obter_pool()` precisasse dela. Dado que a regra 10 do
+`CLAUDE.md` pede para não fazer alterações cosméticas sem motivo concreto
+e isto não é um bug real, não atualizei a constante — deixo registado
+para quem decidir que vale a pena manter esse fallback sincronizado.
+
+Nenhum template foi criado, corrigido ou apagado manualmente nesta
+execução — a única alteração aos templates ativos foi automática, feita
+pelo próprio `agent/motivacao.py` em produção.
+
+### Pendente para a próxima execução
+
+1. Continuar a rever a acentuação de todos os templates `APPROVED` a cada
+   execução, com olhos frescos (incluir sempre os novos lotes automáticos).
+2. `mensagem_sexta_urgente_01` continua por esclarecer (ver ponto 5 do
+   registo de 17/08) — sem novidades hoje.
+3. Nenhum trabalho pendente do bug do campo `example` — todos os templates
+   ativos continuam a incluí-lo, incluindo os gerados automaticamente.
+4. `mensagem_fimdia_32` em falta (ver acima) — não é urgente, só registo;
+   sem ação necessária a menos que o padrão se repita com mais frequência.
