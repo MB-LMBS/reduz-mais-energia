@@ -1494,3 +1494,73 @@ pelo próprio `agent/motivacao.py` em produção.
    ativos continuam a incluí-lo, incluindo os gerados automaticamente.
 4. `mensagem_fimdia_32` em falta (ver acima) — não é urgente, só registo;
    sem ação necessária a menos que o padrão se repita com mais frequência.
+
+---
+
+## 18/09/2026
+
+### Estado encontrado no início desta execução
+
+`META_ACCESS_TOKEN` e `META_WABA_ID` disponíveis no ambiente. Listagem
+completa via GET `message_templates` (fields
+`name,status,rejected_reason,components,language`) — 43 templates
+`mensagem_*`, exatamente os mesmos nomes e estados do registo de 17/09:
+
+- **Trabalho pendente de 17/08 (prioridade máxima do enunciado da tarefa) —
+  continua totalmente resolvido**: `mensagem_manha_13-24`, `mensagem_fimdia_21-30`
+  e `mensagem_sexta_13-18` — todos **APPROVED**, todos com `example.body_text`
+  confirmado (verificação direta do componente `BODY` de cada um). As
+  mensagens das 19h30 (Quarta e Sexta, desde a alteração de horário de
+  25/08) devem continuar a ser entregues normalmente.
+- `mensagem_fimdia_31`, `mensagem_fimdia_33`, `mensagem_fimdia_34` (lote
+  automático gerado pelo próprio `agent/motivacao.py`, registado em 17/09) —
+  continuam **APPROVED**, com `example` e sem erros de português. `mensagem_fimdia_32`
+  continua em falta (nem `REJECTED` nem `PENDING`), sem impacto funcional —
+  ver registo de 17/09 para o contexto; nada de novo a acrescentar.
+- `mensagem_sexta_urgente_01` — continua **REJECTED** (`INVALID_FORMAT`, sem
+  `example`, texto ainda com "dedicacao"/"Ate" por corrigir). Confirmei de
+  novo, por pesquisa de texto ("urgente") em todo o repositório, que não
+  está referenciado em nenhum código. Mantida a mesma cautela dos registos
+  anteriores — não corrigido nem apagado.
+- Todos os outros 39 templates ativos (`manha_13-35`, `fimdia_21-30`,
+  `sexta_13-18`) — **APPROVED**.
+
+Nota sobre o estado do repositório: no início desta execução o `HEAD` local
+estava destacado (`detached HEAD`) num commit (`7481fb0`, registo de 17/09)
+mais recente do que a cópia local em cache de `origin/main`. Tal como em
+31/08, um `git fetch origin main` confirmou tratar-se apenas de uma
+referência local desatualizada — `origin/main` já estava, de facto, nesse
+mesmo commit (fast-forward, sem divergência real nem trabalho perdido).
+Recriei a branch local `main` a apontar para `origin/main` antes de
+continuar.
+
+### Trabalho realizado
+
+**Verificação de rotina (ponto 4 da tarefa):** revi com cuidado, com olhos
+frescos, o texto completo dos 42 templates `APPROVED` (acentuação, cedilhas,
+confusão "e"/"é"). Não encontrei nenhum erro de português nesta execução —
+todos os textos estão corretos.
+
+Comparei `POOL_RESERVA` em `agent/motivacao.py` com a listagem atual da
+Meta: `manha` (`13-24`+`25-35`, 23 templates) e `sexta` (`13-18`, 6
+templates) continuam sem divergência. `fim_dia` no fallback estático
+continua a listar só `21-30` (não inclui os `31`/`33`/`34` gerados
+automaticamente em 17/09) — situação inalterada e já avaliada em 17/09 como
+não sendo um bug real (`_obter_pool()` usa sempre a Meta em primeiro lugar;
+o fallback só entraria em jogo se a API estivesse em baixo). Mantida a
+mesma decisão de não mexer sem motivo concreto (regra 10 do `CLAUDE.md`).
+
+Nenhum template foi criado, corrigido ou apagado nesta execução. Nenhuma
+alteração de código necessária — nem em `agent/motivacao.py` nem em
+`agent/meta_templates.py`.
+
+### Pendente para a próxima execução
+
+1. Continuar a rever a acentuação de todos os templates `APPROVED` a cada
+   execução, com olhos frescos.
+2. `mensagem_sexta_urgente_01` continua por esclarecer (ver ponto 5 do
+   registo de 17/08) — sem novidades hoje.
+3. `mensagem_fimdia_32` continua em falta, sem impacto funcional (ver
+   registo de 17/09) — sem ação necessária a menos que o padrão se repita.
+4. Nenhum trabalho pendente do bug do campo `example` — todos os templates
+   ativos continuam a incluí-lo.
