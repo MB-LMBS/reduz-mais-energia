@@ -1564,3 +1564,88 @@ alteração de código necessária — nem em `agent/motivacao.py` nem em
    registo de 17/09) — sem ação necessária a menos que o padrão se repita.
 4. Nenhum trabalho pendente do bug do campo `example` — todos os templates
    ativos continuam a incluí-lo.
+
+---
+
+## 20/09/2026
+
+### Estado encontrado no início desta execução
+
+`META_ACCESS_TOKEN` e `META_WABA_ID` disponíveis no ambiente. Listagem
+completa via GET `message_templates` (fields
+`name,status,rejected_reason,components,language`) — **47 templates**
+`mensagem_*`, quatro a mais do que no registo de 18/09 (43; não houve
+execução a 19/09, Sábado, fora da janela Segunda-Sexta do agente):
+
+- **Trabalho pendente de 17/08 (prioridade máxima do enunciado da tarefa) —
+  continua totalmente resolvido**: `mensagem_manha_13-24`, `mensagem_fimdia_21-30`
+  e `mensagem_sexta_13-18` — todos **APPROVED**, todos com `example.body_text`
+  confirmado (verificação direta do componente `BODY` de cada um).
+- `mensagem_fimdia_31`, `33`, `34` (lote automático de 17/09) — continuam
+  **APPROVED**, com `example`. `mensagem_fimdia_32` continua em falta (nem
+  `REJECTED` nem `PENDING`) — sem impacto funcional, ver registo de 17/09.
+- **Novidade desta execução**: novo lote automático de `agent/motivacao.py`
+  (`_gerar_e_submeter_novo_lote`) para o tipo `sexta` — apareceram
+  `mensagem_sexta_19`, `20`, `21` e `22`, todos **APPROVED**, todos com
+  `example.body_text` presente (verificado componente a componente). Ao
+  contrário do que aconteceu com `fim_dia` em 17/09, desta vez os 4 índices
+  reservados (`proximo_indice_livre` a partir de `18`) foram todos usados
+  com sucesso — não há número em falta na sequência `19-22`.
+- `mensagem_sexta_urgente_01` — continua **REJECTED** (`INVALID_FORMAT`, sem
+  `example`, texto ainda com "dedicacao"/"Ate" por corrigir). Confirmei de
+  novo, por pesquisa de texto ("urgente") em todo o repositório, que não
+  está referenciado em nenhum código. Mantida a mesma cautela dos registos
+  anteriores — não corrigido nem apagado.
+- Todos os outros templates ativos (`manha_13-35`, 23; `fimdia_21-31,33,34`,
+  13; `sexta_13-18`, 6) — **APPROVED**, sem alterações face a 18/09.
+
+Repositório: `HEAD` local voltou a estar destacado no commit de 18/09
+(`949d5ef`), tal como em execuções anteriores. `git fetch origin main`
+confirmou que `origin/main` já estava nesse mesmo commit (sem divergência),
+recriei a branch local `main` a apontar para `origin/main` antes de
+continuar.
+
+### Trabalho realizado
+
+**Verificação de rotina (ponto 4 da tarefa):** revi com olhos frescos o
+texto completo dos 46 templates `APPROVED` (os 42 já existentes em 18/09
+mais os 4 novos `sexta_19-22`) — acentuação, cedilhas, confusão "e"/"é".
+Não encontrei nenhum erro de acentuação ou ortografia nesta execução.
+
+Uma observação de conteúdo (não é erro de português, por isso não corrigi
+sem ter mais confiança de que vale a pena gastar um ciclo de revisão da
+Meta): `mensagem_sexta_19` abre com "Boa semana, {{1}}!" — mas é uma
+mensagem de **fecho** de semana (sexta-feira ao final do dia, incentivo a
+aproveitar o fim de semana, conforme `DESCRICAO_TIPO["sexta"]`). Em PT-PT,
+"Boa semana" costuma dizer-se no início da semana (equivalente a "have a
+good week ahead"), não na sexta-feira a fechar o dia de trabalho — pode
+soar estranho a quem recebe. Fica registada a dúvida em vez de agir: se
+concordarem que vale a pena, posso gerar um substituto (novo nome, com
+`example`) numa próxima execução.
+
+Comparei `POOL_RESERVA` em `agent/motivacao.py` com a listagem atual da
+Meta: o fallback estático de `sexta` continua a listar só `13-18` — os
+novos `19-22` (gerados automaticamente hoje) não estão incluídos, tal como
+já acontecia com o fallback de `fim_dia` desde 17/09. Mesma avaliação de
+sempre: não é um bug real (`_obter_pool()` usa sempre a Meta em primeiro
+lugar; o fallback só entraria em jogo se a API estivesse em baixo) e a
+regra 10 do `CLAUDE.md` pede para não fazer alterações cosméticas sem
+motivo concreto — não atualizei a constante.
+
+Nenhum template foi criado, corrigido ou apagado manualmente nesta
+execução — a única alteração aos templates ativos foi automática, feita
+pelo próprio `agent/motivacao.py` em produção. Nenhuma alteração de código
+necessária em `agent/meta_templates.py` nem em `agent/motivacao.py`.
+
+### Pendente para a próxima execução
+
+1. Continuar a rever a acentuação de todos os templates `APPROVED` a cada
+   execução, com olhos frescos (incluir sempre os novos lotes automáticos).
+2. Decidir sobre a dúvida de conteúdo em `mensagem_sexta_19` ("Boa semana"
+   como abertura de mensagem de fecho de semana) — ver acima.
+3. `mensagem_sexta_urgente_01` continua por esclarecer (ver ponto 5 do
+   registo de 17/08) — sem novidades hoje.
+4. `mensagem_fimdia_32` continua em falta, sem impacto funcional (ver
+   registo de 17/09) — sem ação necessária a menos que o padrão se repita.
+5. Nenhum trabalho pendente do bug do campo `example` — todos os templates
+   ativos continuam a incluí-lo.
