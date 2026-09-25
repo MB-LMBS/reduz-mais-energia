@@ -1971,3 +1971,104 @@ alteração de código necessária — nem em `agent/motivacao.py` nem em
    registo de 17/09) — sem ação necessária a menos que o padrão se repita.
 5. Nenhum trabalho pendente do bug do campo `example` — todos os templates
    ativos continuam a incluí-lo.
+
+---
+
+## 25/09/2026
+
+### Estado encontrado no início desta execução
+
+`META_ACCESS_TOKEN` e `META_WABA_ID` disponíveis no ambiente. Listagem
+completa via GET `message_templates` (fields
+`name,status,rejected_reason,components,language`, `limit=200`) — 51
+templates no total (`paging` sem chave `next`, confirmando que os 51
+couberam num só pedido), 47 deles `mensagem_*`, exatamente os mesmos nomes
+e estados do registo de 24/09:
+
+- **Trabalho pendente de 17/08 (prioridade máxima do enunciado da tarefa) —
+  continua totalmente resolvido**: `mensagem_manha_13-24`, `mensagem_fimdia_21-30`
+  e `mensagem_sexta_13-18` — todos **APPROVED**, todos com `example.body_text`
+  confirmado.
+- `mensagem_fimdia_31`, `33`, `34` e `mensagem_sexta_19-22` — continuam
+  **APPROVED**, todos com `example`. `mensagem_fimdia_32` continua em falta,
+  sem impacto funcional (ver registo de 17/09).
+- `mensagem_sexta_urgente_01` — continua **REJECTED** (`INVALID_FORMAT`, sem
+  `example`, texto ainda com "dedicacao"/"Ate" por corrigir).
+- Todos os outros templates ativos (`manha_13-35`, 23; `fimdia_21-31,33,34`,
+  13; `sexta_13-22`, 10) — **APPROVED**, sem alterações face a 24/09. Total
+  de 47 templates `mensagem_*` (mais 4 templates de outros fluxos, fora do
+  âmbito desta manutenção: `alerta_novo_pedido_simulador`,
+  `site_novo_pedido`, `tally_nova_submissao`, `hello_world`).
+
+Repositório: `git status` limpo. A sessão arrancou com `HEAD` destacado no
+commit de 24/09 (`8155bfa`) — sem ramo `main` associado. Fiz `git checkout
+main` (o ramo local `main` já apontava, antes do checkout, para o commit
+anterior `4b299a7`) seguido de `git pull origin main`, que avançou em
+fast-forward até `8155bfa`, igualando `origin/main`. Sem divergência nem
+perda de trabalho — o `checkout`/`pull` só moveu o ponteiro do ramo, não
+tocou em ficheiros.
+
+### Correção a um registo anterior
+
+Ao reverificar a nota sobre `mensagem_sexta_urgente_01` repetida nos
+registos de 22/09, 23/09 e 24/09 ("não é incluído... por não bater com o
+padrão `_(\d+)$` usado em `proximo_indice_livre`"), confirmei por teste
+direto em Python que essa afirmação estava **incorreta**: o nome
+`mensagem_sexta_urgente_01` **bate** com `_(\d+)$` (captura `01`, o sufixo
+final da string) e **começa** por `mensagem_sexta_` (`str.startswith`), pelo
+que `listar_templates("mensagem_sexta_")` — chamada por
+`proximo_indice_livre` — inclui sim este template na lista candidata.
+
+Isto não muda a conclusão prática dos registos anteriores: como o índice
+capturado (`01`) é menor do que o maior índice ativo da série
+(`mensagem_sexta_22`), `proximo_indice_livre("mensagem_sexta_")` continua a
+devolver `23`, sem qualquer efeito no próximo lote automático. E como
+`_obter_pool()` usa `listar_templates_aprovados`, que filtra por
+`status == "APPROVED"`, o template `REJECTED` nunca entra na rotação de
+envio. Ou seja, sem impacto funcional hoje — mas caso um dia a série
+`mensagem_sexta_*` fique sem templates numerados acima de `01` (por
+exemplo, se todos os `13-22` forem alguma vez apagados), este nome rejeitado
+passaria a influenciar o próximo índice gerado. Não é uma situação atual,
+por isso não alterei `meta_templates.py` sem motivo concreto (regra 10 do
+`CLAUDE.md`) — fica registado para vigilância futura.
+
+### Trabalho realizado
+
+**Verificação de rotina (ponto 4 da tarefa):** revi com olhos frescos o
+texto completo dos 46 templates `APPROVED` (acentuação, cedilhas, confusão
+"e"/"é") — inclui os lotes mais recentes (`fimdia_31/33/34`,
+`sexta_19-22`). Não encontrei nenhum erro de acentuação ou ortografia nesta
+execução.
+
+Confirmei também, por inspeção do componente `BODY` de cada um, que nenhum
+template `APPROVED` com `{{1}}` no corpo está sem `example` — só o
+`sexta_urgente_01` (`REJECTED`, já conhecido) está nessa situação.
+
+Revisitei a dúvida de conteúdo de `mensagem_sexta_19` ("Boa semana, {{1}}!"
+como abertura de mensagem de **fecho** de semana), registada desde 20/09:
+mantenho a mesma avaliação — escolha de tom discutível, não é erro de
+acentuação nem de português, fora do âmbito de correção automática desta
+tarefa.
+
+Revi `PREFIXOS`, `POOL_RESERVA`, `DESCRICAO_TIPO` e `proximo_indice_livre`
+em `agent/motivacao.py`/`agent/meta_templates.py` — sem alterações de
+código desde 24/09 (a nota da secção anterior é uma correção ao registo,
+não uma alteração de comportamento).
+
+Nenhum template foi criado, corrigido ou apagado nesta execução.
+
+### Pendente para a próxima execução
+
+1. Continuar a rever a acentuação de todos os templates `APPROVED` a cada
+   execução, com olhos frescos.
+2. Dúvida de conteúdo em `mensagem_sexta_19` ("Boa semana" como abertura de
+   mensagem de fecho de semana) continua por decidir — ver registos desde
+   20/09.
+3. `mensagem_sexta_urgente_01` continua por esclarecer (ver ponto 5 do
+   registo de 17/08) — hoje corrigida apenas a explicação técnica de por que
+   não afeta a rotação (ver secção "Correção a um registo anterior" acima);
+   a decisão de corrigir/apagar continua pendente.
+4. `mensagem_fimdia_32` continua em falta, sem impacto funcional (ver
+   registo de 17/09) — sem ação necessária a menos que o padrão se repita.
+5. Nenhum trabalho pendente do bug do campo `example` — todos os templates
+   ativos continuam a incluí-lo.
