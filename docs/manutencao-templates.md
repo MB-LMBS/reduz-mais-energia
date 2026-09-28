@@ -2244,3 +2244,83 @@ alteração de código necessária — nem em `agent/motivacao.py` nem em
    registo de 17/09) — sem ação necessária a menos que o padrão se repita.
 5. Nenhum trabalho pendente do bug do campo `example` — todos os templates
    ativos continuam a incluí-lo.
+
+---
+
+## 28/09/2026
+
+### Estado encontrado no início desta execução
+
+`META_ACCESS_TOKEN` e `META_WABA_ID` disponíveis no ambiente. Listagem
+completa via GET `message_templates` (fields
+`name,status,rejected_reason,components,language`, `limit=200`) — 51
+templates no total (`paging` sem chave `next`, confirmando que os 51
+couberam num só pedido), 47 deles `mensagem_*`, exatamente os mesmos nomes
+e estados do registo de 27/09:
+
+- **Trabalho pendente de 17/08 (prioridade máxima do enunciado da tarefa) —
+  continua totalmente resolvido**: `mensagem_manha_13-24`, `mensagem_fimdia_21-30`
+  e `mensagem_sexta_13-18` — todos **APPROVED**, todos com `example.body_text`
+  confirmado (verificação automática por presença de `{{1}}` no corpo vs.
+  presença do campo `example`). As mensagens das 19h30 (Quarta e Sexta, desde
+  a alteração de horário de 25/08) devem continuar a ser entregues
+  normalmente.
+- `mensagem_fimdia_31`, `33`, `34` e `mensagem_sexta_19-22` (lotes
+  automáticos de 17/09 e 20/09) — continuam **APPROVED**, todos com
+  `example`. `mensagem_fimdia_32` continua em falta (nem `REJECTED` nem
+  `PENDING`), sem impacto funcional, ver registo de 17/09.
+- `mensagem_sexta_urgente_01` — continua **REJECTED** (`INVALID_FORMAT`, sem
+  `example`, texto ainda com "dedicacao"/"Ate" por corrigir). Confirmei de
+  novo, por pesquisa de texto ("urgente") em todo o repositório, que não
+  está referenciado em nenhum código. Mantida a mesma cautela dos registos
+  anteriores — não corrigido nem apagado.
+- Todos os outros templates ativos (`manha_13-35`, 23; `fimdia_21-31,33,34`,
+  13; `sexta_13-22`, 10) — **APPROVED**, sem alterações face a 27/09. Total
+  de 46 `mensagem_*` `APPROVED` + 1 `REJECTED` = 47, mais 4 templates de
+  outros fluxos, fora do âmbito desta manutenção
+  (`alerta_novo_pedido_simulador`, `site_novo_pedido`,
+  `tally_nova_submissao`, `hello_world`).
+
+Repositório: sessão arrancou com `HEAD` destacado no commit `316690a`
+(registo de 27/09). Fiz `git checkout main` (o ramo local `main` apontava
+antes para `4b299a7`) seguido de `git pull origin main`, que avançou em
+fast-forward até `316690a`, igualando `origin/main`. Sem divergência nem
+perda de trabalho.
+
+### Trabalho realizado
+
+**Verificação de rotina (ponto 4 da tarefa):** revi com olhos frescos o
+texto completo dos 46 templates `APPROVED` (acentuação, cedilhas, confusão
+"e"/"é"). Não encontrei nenhum erro de acentuação ou ortografia nesta
+execução.
+
+Confirmei também, por inspeção programática do componente `BODY` de cada
+um, que nenhum template `APPROVED` com `{{1}}` no corpo está sem `example`
+— só o `sexta_urgente_01` (`REJECTED`, já conhecido) está nessa situação.
+
+Revi `PREFIXOS`, `POOL_RESERVA`, `DESCRICAO_TIPO` e `proximo_indice_livre`
+em `agent/motivacao.py`/`agent/meta_templates.py` — sem alterações desde
+27/09. Os fallbacks estáticos de `fim_dia` (`21-30`) e `sexta` (`13-18`)
+continuam a não incluir os lotes automáticos mais recentes (`fimdia_31/33/34`,
+`sexta_19-22`) — mesma situação já avaliada em execuções anteriores como
+não sendo um bug real (`_obter_pool()` usa sempre a listagem da Meta em
+primeiro lugar). Mantida a mesma decisão de não mexer sem motivo concreto
+(regra 10 do `CLAUDE.md`).
+
+Nenhum template foi criado, corrigido ou apagado nesta execução. Nenhuma
+alteração de código necessária — nem em `agent/motivacao.py` nem em
+`agent/meta_templates.py`. Estado inalterado desde 27/09.
+
+### Pendente para a próxima execução
+
+1. Continuar a rever a acentuação de todos os templates `APPROVED` a cada
+   execução, com olhos frescos.
+2. Dúvida de conteúdo em `mensagem_sexta_19` ("Boa semana" como abertura de
+   mensagem de fecho de semana) continua por decidir — ver registos desde
+   20/09.
+3. `mensagem_sexta_urgente_01` continua por esclarecer (ver ponto 5 do
+   registo de 17/08) — sem novidades hoje.
+4. `mensagem_fimdia_32` continua em falta, sem impacto funcional (ver
+   registo de 17/09) — sem ação necessária a menos que o padrão se repita.
+5. Nenhum trabalho pendente do bug do campo `example` — todos os templates
+   ativos continuam a incluí-lo.
