@@ -29,13 +29,15 @@ logger = logging.getLogger("agentkit")
 
 client = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
-# Comerciais/consultores que recebem as mensagens diárias
-# Helena Barroso e Paula Garcia removidas a pedido do utilizador (13/10/2026).
-# Frederico Mesquita (Citrobox, parceiro de negócio) adicionado na mesma data.
+# Comerciais/consultores que recebem as mensagens diárias de motivação —
+# NUNCA incluir aqui parceiros de negócio (ex: Frederico Mesquita/Citrobox):
+# estas mensagens são escritas especificamente para comerciais júnior a
+# começar a carreira (ver prompt em _gerar_e_submeter_novo_lote), seria
+# desadequado para uma relação de parceria. Helena Barroso e Paula Garcia
+# removidas a pedido do utilizador (13/10/2026).
 CONSULTORES = [
     {"nome": "Luis Sequeira", "telefone": "351937157871"},
     {"nome": "Catarina Sequeira", "telefone": "351937157872"},
-    {"nome": "Frederico Mesquita", "telefone": "351967777982"},
 ]
 
 PREFIXOS = {"manha": "mensagem_manha_", "fim_dia": "mensagem_fimdia_", "sexta": "mensagem_sexta_"}
