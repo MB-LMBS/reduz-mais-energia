@@ -3435,3 +3435,93 @@ alteração de código necessária. Estado inalterado desde 12/10.
    registo de 17/09) — sem ação necessária a menos que o padrão se repita.
 5. Nenhum trabalho pendente do bug do campo `example` — todos os templates
    ativos continuam a incluí-lo.
+
+
+---
+
+## 14/10/2026
+
+### Estado encontrado no início desta execução
+
+`META_ACCESS_TOKEN` e `META_WABA_ID` disponíveis no ambiente. Listagem
+completa via GET `message_templates` (fields
+`name,status,rejected_reason,components,language`, `limit=200`) — 58
+templates no total (uma só página, sem `next` no `paging`), 54 deles
+`mensagem_*` — **7 mais do que no registo de 13/10 (47)**:
+
+- **Trabalho pendente de 17/08 (prioridade máxima do enunciado da tarefa) —
+  continua totalmente resolvido**: `mensagem_manha_13-24`, `mensagem_fimdia_21-30`
+  e `mensagem_sexta_13-18` — todos **APPROVED**, todos com `example.body_text`
+  confirmado.
+- `mensagem_fimdia_31`, `33`, `34` e `mensagem_sexta_19-22` — continuam
+  **APPROVED**, todos com `example`. `mensagem_fimdia_32` continua em falta,
+  sem impacto funcional (ver registo de 17/09).
+- `mensagem_sexta_urgente_01` — continua **REJECTED** (`INVALID_FORMAT`, sem
+  `example`). Não referenciado em código. Mantida a mesma cautela — não
+  corrigido nem apagado.
+- **Novidade desta execução**: apareceram 7 templates `mensagem_parceiro_*`
+  (`mensagem_parceiro_manha_01-04` e `mensagem_parceiro_fimdia_01,03,04` —
+  note-se que falta o `02` de cada grupo, tal como já acontece com
+  `fimdia_32`), todos **APPROVED**, todos em `pt_PT`, todos com `example`
+  no componente `BODY`. Confirmei por `grep` em todo o repositório que
+  nenhum destes nomes está referenciado em `agent/motivacao.py`,
+  `agent/meta_templates.py` nem em qualquer outro ficheiro — `PREFIXOS` em
+  `motivacao.py` só conhece `mensagem_manha_`, `mensagem_fimdia_` e
+  `mensagem_sexta_`. Ou seja, estes templates foram criados fora deste
+  sistema automático (provavelmente diretamente no Meta Business Manager,
+  pelo utilizador, para comunicar com parceiros de negócio reais — ver o
+  comentário em `CONSULTORES` sobre nunca misturar parceiros com
+  comerciais júnior). Texto revisto: acentuação e conteúdo corretos em
+  todos os 7, sem erros encontrados. Como não são geridos por este
+  sistema e não apresentam problemas, não necessitam de ação — só registo
+  informativo.
+- Todos os templates `manha`/`fimdia`/`sexta` previamente conhecidos —
+  **APPROVED**, sem alterações de texto face a 13/10. Total:
+  46 `mensagem_*` (manha/fimdia/sexta) `APPROVED` + 1 `REJECTED`
+  (`sexta_urgente_01`) + 7 `mensagem_parceiro_*` `APPROVED` = 54, mais 4
+  templates de outros fluxos, fora do âmbito desta manutenção
+  (`alerta_novo_pedido_simulador`, `site_novo_pedido`,
+  `tally_nova_submissao`, `hello_world`).
+
+### Trabalho realizado
+
+**Verificação de rotina (ponto 4 da tarefa):** revi com olhos frescos o
+texto completo dos 53 templates `APPROVED` com prefixo `mensagem_`
+(incluindo os 7 `parceiro_*` novos), à procura de acentuação em falta,
+cedilhas e confusão "e"/"é". Não encontrei nenhum erro nesta execução.
+
+Confirmei também, por inspeção programática do componente `BODY` de cada
+template, que nenhum `APPROVED` com `{{1}}` no corpo está sem `example` —
+só o `sexta_urgente_01` (`REJECTED`, já conhecido) está nessa situação.
+
+Revi `PREFIXOS`, `POOL_RESERVA`, `DESCRICAO_TIPO` e `CONSULTORES` em
+`agent/motivacao.py`, e as funções de `agent/meta_templates.py`
+(confirmado que o campo `example` continua a ser adicionado
+automaticamente em `criar_template()`) — tudo consistente com os
+templates `manha`/`fimdia`/`sexta` ativos na Meta, sem necessidade de
+alteração. Mantida a mesma decisão de não tocar nos fallbacks estáticos
+sem motivo concreto (regra 10 do `CLAUDE.md`).
+
+Nenhum template foi criado, corrigido ou apagado nesta execução. Nenhuma
+alteração de código necessária.
+
+### Pendente para a próxima execução
+
+1. Continuar a rever a acentuação de todos os templates `APPROVED` a cada
+   execução, com olhos frescos (agora incluindo também os 7
+   `mensagem_parceiro_*`, mesmo não sendo geridos por `motivacao.py`).
+2. Dúvida de conteúdo em `mensagem_sexta_19` ("Boa semana" como abertura de
+   mensagem de fecho de semana) continua por decidir — ver registos desde
+   20/09. Não é um erro de português, por isso continuo a não agir sem
+   confirmação de que vale a pena gastar um ciclo de revisão da Meta.
+3. `mensagem_sexta_urgente_01` continua por esclarecer (ver ponto 5 do
+   registo de 17/08) — sem novidades hoje.
+4. `mensagem_fimdia_32` continua em falta, sem impacto funcional (ver
+   registo de 17/09) — sem ação necessária a menos que o padrão se repita.
+5. Os `mensagem_parceiro_*` (novidade de hoje) não estão ligados a nenhum
+   fluxo automático neste repositório — a confirmar com o utilizador, se
+   fizer sentido, se são geridos manualmente de propósito ou se deveria
+   existir código equivalente a `motivacao.py` para os enviar/rotacionar.
+   Por agora, apenas registo informativo, sem ação.
+6. Nenhum trabalho pendente do bug do campo `example` — todos os templates
+   ativos continuam a incluí-lo.
