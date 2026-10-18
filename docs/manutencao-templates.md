@@ -3778,3 +3778,87 @@ alteração de código necessária. Estado inalterado desde 16/10.
    utilizador se for relevante, sem ação própria.
 6. Nenhum trabalho pendente do bug do campo `example` — todos os templates
    ativos continuam a incluí-lo.
+
+---
+
+## 18/10/2026
+
+### Estado encontrado no início desta execução
+
+`META_ACCESS_TOKEN` e `META_WABA_ID` disponíveis no ambiente. Listagem
+completa via GET `message_templates` (fields
+`name,status,rejected_reason,components,language`, `limit=200`) — 58
+templates no total (uma só página, sem `next` no `paging`), 54 deles
+`mensagem_*` — mesmo total e exatamente os mesmos nomes e estados do
+registo de 17/10:
+
+- **Trabalho pendente de 17/08 (prioridade máxima do enunciado da tarefa) —
+  continua totalmente resolvido**: `mensagem_manha_13-24`, `mensagem_fimdia_21-30`
+  e `mensagem_sexta_13-18` — todos **APPROVED**, todos com `example.body_text`
+  confirmado no componente `BODY`.
+- `mensagem_fimdia_31`, `33`, `34`, `mensagem_manha_25-35` e
+  `mensagem_sexta_19-22` — continuam **APPROVED**, todos com `example`.
+  `mensagem_fimdia_32` continua em falta, sem impacto funcional (ver
+  registo de 17/09).
+- `mensagem_parceiro_manha_01-04` e `mensagem_parceiro_fimdia_01,03,04` (7
+  templates, ver registo de 14/10) — continuam **APPROVED**, sem alterações
+  de texto. `mensagem_parceiro_fimdia_02` continua em falta (mesmo padrão
+  do `fimdia_32`). Confirmei de novo por `grep` que nenhum destes nomes
+  está referenciado em `agent/motivacao.py` ou `agent/meta_templates.py` —
+  continuam fora do âmbito deste sistema automático, só registo
+  informativo.
+- `mensagem_sexta_urgente_01` — continua **REJECTED** (`INVALID_FORMAT`, sem
+  `example`, texto ainda com "dedicacao"/"Ate" por corrigir). Confirmei de
+  novo, por pesquisa de texto ("urgente") em todo o repositório, que não
+  está referenciado em nenhum código. Mantida a mesma cautela dos registos
+  anteriores — não corrigido nem apagado.
+- Total: 46 `mensagem_*` (manha/fimdia/sexta) `APPROVED` + 1 `REJECTED`
+  (`sexta_urgente_01`) + 7 `mensagem_parceiro_*` `APPROVED` = 54, mais 4
+  templates de outros fluxos, fora do âmbito desta manutenção
+  (`alerta_novo_pedido_simulador`, `site_novo_pedido`,
+  `tally_nova_submissao`, `hello_world`).
+
+Repositório: sessão arrancou em `HEAD` destacado no commit `a7dcd23`
+(registo de 17/10), em fast-forward puro com `origin/main` (`git status`
+limpo). Sem divergência nem trabalho perdido.
+
+### Trabalho realizado
+
+**Verificação de rotina (ponto 4 da tarefa):** revi com olhos frescos o
+texto completo dos 53 templates `APPROVED` com prefixo `mensagem_`
+(incluindo os 7 `parceiro_*`), à procura de acentuação em falta, cedilhas
+e confusão "e"/"é". Não encontrei nenhum erro nesta execução.
+
+Confirmei também, por inspeção programática do componente `BODY` de cada
+template, que nenhum `APPROVED` com `{{1}}` no corpo está sem `example` —
+só o `sexta_urgente_01` (`REJECTED`, já conhecido) está nessa situação.
+
+Revi o histórico de `agent/motivacao.py` e `agent/meta_templates.py` desde
+o último registo (`git log fec6fe4..HEAD -- agent/motivacao.py
+agent/meta_templates.py`) — sem commits novos a tocar nestes ficheiros.
+`PREFIXOS`, `POOL_RESERVA`, `DESCRICAO_TIPO` e `CONSULTORES` continuam
+consistentes com os templates ativos na Meta. Mantida a mesma decisão de
+não tocar nos fallbacks estáticos sem motivo concreto (regra 10 do
+`CLAUDE.md`).
+
+Nenhum template foi criado, corrigido ou apagado nesta execução. Nenhuma
+alteração de código necessária. Estado inalterado desde 17/10.
+
+### Pendente para a próxima execução
+
+1. Continuar a rever a acentuação de todos os templates `APPROVED` a cada
+   execução, com olhos frescos (incluindo os `mensagem_parceiro_*`).
+2. Dúvida de conteúdo em `mensagem_sexta_19` ("Boa semana" como abertura de
+   mensagem de fecho de semana) continua por decidir — ver registos desde
+   20/09. Não é um erro de português, por isso continuo a não agir sem
+   confirmação de que vale a pena gastar um ciclo de revisão da Meta.
+3. `mensagem_sexta_urgente_01` continua por esclarecer (ver ponto 5 do
+   registo de 17/08) — sem novidades hoje.
+4. `mensagem_fimdia_32` e `mensagem_parceiro_fimdia_02` continuam em falta,
+   sem impacto funcional conhecido (ver registos de 17/09 e 14/10) — sem
+   ação necessária a menos que o padrão se repita ou afete algum fluxo.
+5. Os `mensagem_parceiro_*` continuam sem fluxo automático associado neste
+   repositório (ver ponto 5 do registo de 14/10) — a confirmar com o
+   utilizador se for relevante, sem ação própria.
+6. Nenhum trabalho pendente do bug do campo `example` — todos os templates
+   ativos continuam a incluí-lo.
