@@ -5295,3 +5295,104 @@ alteração de código necessária. Estado inalterado desde 02/11.
    utilizador se for relevante, sem ação própria.
 6. Nenhum trabalho pendente do bug do campo `example` — todos os templates
    ativos continuam a incluí-lo.
+
+---
+
+## 05/11/2026
+
+### Estado encontrado no início desta execução
+
+`META_ACCESS_TOKEN` e `META_WABA_ID` disponíveis no ambiente (verificados
+por presença, sem imprimir valores). Listagem completa via GET
+`message_templates` (fields `name,status,rejected_reason,components,language`,
+`limit=250`, paginação seguida até ao fim) — 58 templates no total, 54
+deles `mensagem_*` — mesmo total e exatamente os mesmos nomes e estados
+dos registos de 03/11 e 04/11:
+
+- **Trabalho pendente de 17/08 (prioridade máxima do enunciado da tarefa) —
+  continua totalmente resolvido**: `mensagem_manha_13-24`, `mensagem_fimdia_21-30`
+  e `mensagem_sexta_13-18` — todos **APPROVED**, todos com `example.body_text`
+  confirmado no componente `BODY` (verificação programática: nenhum `APPROVED`
+  com `{{1}}` no corpo sem `example`).
+- `mensagem_fimdia_31`, `33`, `34`, `mensagem_manha_25-35` e
+  `mensagem_sexta_19-22` — continuam **APPROVED**, todos com `example`.
+  `mensagem_fimdia_32` continua em falta, sem impacto funcional (ver
+  registo de 17/09).
+- `mensagem_parceiro_manha_01-04` e `mensagem_parceiro_fimdia_01,03,04` (7
+  templates) — continuam **APPROVED**, sem alterações de texto.
+  `mensagem_parceiro_fimdia_02` continua em falta (mesmo padrão do
+  `fimdia_32`). Confirmei de novo por `grep` ao código (`agent/motivacao.py`
+  e `agent/meta_templates.py`) que nenhum nome `parceiro_*` nem `urgente` é
+  referenciado fora deste ficheiro de registo — continuam fora do âmbito
+  deste sistema automático.
+- `mensagem_sexta_urgente_01` — continua **REJECTED** (`INVALID_FORMAT`, sem
+  `example`, texto ainda com "dedicacao"/"Ate" por corrigir). Continua sem
+  qualquer referência em código. Mantida a mesma cautela dos registos
+  anteriores — não corrigido nem apagado.
+- Total: 46 `mensagem_*` (manha/fimdia/sexta) `APPROVED` + 1 `REJECTED`
+  (`sexta_urgente_01`) + 7 `mensagem_parceiro_*` `APPROVED` = 54, mais 4
+  templates de outros fluxos, fora do âmbito desta manutenção
+  (`alerta_novo_pedido_simulador`, `site_novo_pedido`,
+  `tally_nova_submissao`, `hello_world`).
+
+Repositório: no início desta execução o `HEAD` local estava novamente
+destacado (`detached HEAD`), apontando para `3d5f8c9` (registo de 30/10) —
+5 commits atrás de `origin/main` (`722fcbd`, registo de 04/11). Um
+`git fetch origin main` confirmou que esses 5 registos (31/10 a 04/11)
+já estavam todos em `origin/main`, sem divergência nem trabalho perdido —
+só a branch local `main` é que tinha ficado desatualizada. Recriei a
+branch local `main` a apontar para `origin/main` antes de continuar, como
+nos registos anteriores com a mesma situação.
+
+**Nota sobre a ordem deste ficheiro:** reparei que a secção `## 04/11/2026`
+aparece ANTES da secção `## 03/11/2026` neste ficheiro (ou seja, fora de
+ordem cronológica) — o conteúdo de ambas está correto e consistente entre
+si, só a posição está trocada. Não reordenei nem reescrevi secções
+antigas (seria alterar histórico sem necessidade); limito-me a registar
+aqui a anomalia para referência futura. A secção de hoje (05/11) é
+acrescentada ao fundo do ficheiro, na posição cronologicamente correta a
+seguir à última secção existente.
+
+### Trabalho realizado
+
+**Verificação de rotina (ponto 4 da tarefa):** li integralmente, uma por
+uma e com olhos frescos, o texto dos 53 templates `APPROVED` com prefixo
+`mensagem_` (incluindo os 7 `parceiro_*`), à procura de acentuação em
+falta, cedilhas e confusão "e"/"é". Não encontrei nenhum erro nesta
+execução.
+
+Confirmei também, por inspeção programática do componente `BODY` de cada
+template, que nenhum `APPROVED` com `{{1}}` no corpo está sem `example` —
+só o `sexta_urgente_01` (`REJECTED`, já conhecido) está nessa situação.
+
+Revi o histórico de `agent/meta_templates.py` e `agent/motivacao.py` (sem
+commits novos desde `fec6fe4`, de 13/10) — sem alterações a estes
+ficheiros. `PREFIXOS`, `POOL_RESERVA`, `DESCRICAO_TIPO` e `CONSULTORES`
+continuam consistentes com os templates ativos na Meta.
+
+Nenhum template foi criado, corrigido ou apagado nesta execução. Nenhuma
+alteração de código necessária. Estado inalterado desde 03/11 e 04/11,
+exceto a correção da branch local `main` e o registo da anomalia de
+ordenação acima.
+
+### Pendente para a próxima execução
+
+1. Continuar a rever a acentuação de todos os templates `APPROVED` a cada
+   execução, com olhos frescos (incluindo os `mensagem_parceiro_*`).
+2. Dúvida de conteúdo em `mensagem_sexta_19` ("Boa semana" como abertura de
+   mensagem de fecho de semana) continua por decidir — ver registos desde
+   20/09. Não é um erro de português, por isso continuo a não agir sem
+   confirmação de que vale a pena gastar um ciclo de revisão da Meta.
+3. `mensagem_sexta_urgente_01` continua por esclarecer (ver ponto 5 do
+   registo de 17/08) — sem novidades hoje.
+4. `mensagem_fimdia_32` e `mensagem_parceiro_fimdia_02` continuam em falta,
+   sem impacto funcional conhecido (ver registos de 17/09 e 14/10) — sem
+   ação necessária a menos que o padrão se repita ou afete algum fluxo.
+5. Os `mensagem_parceiro_*` continuam sem fluxo automático associado neste
+   repositório (ver ponto 5 do registo de 14/10) — a confirmar com o
+   utilizador se for relevante, sem ação própria.
+6. Nenhum trabalho pendente do bug do campo `example` — todos os templates
+   ativos continuam a incluí-lo.
+7. A secção `## 04/11/2026` está fora de ordem cronológica neste ficheiro
+   (aparece antes de `## 03/11/2026`) — registo informativo apenas, ver
+   nota acima; não requer ação.
