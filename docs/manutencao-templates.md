@@ -5935,3 +5935,112 @@ correção da branch local `main`.
    anteriores a 01/10 num ficheiro separado traria pouco risco e
    melhoraria a legibilidade — mas continuo sem fazer essa alteração sem
    confirmação explícita do utilizador.
+
+## 12/11/2026
+
+### Estado encontrado no início desta execução
+
+`META_ACCESS_TOKEN` e `META_WABA_ID` disponíveis no ambiente (verificados
+por presença, sem imprimir valores). Listagem completa via GET
+`message_templates` (fields `name,status,rejected_reason,components,language`,
+`limit=250`) — 58 templates no total (uma só página, sem `next` no
+`paging`), 54 deles `mensagem_*` — mesmo total e exatamente os mesmos
+nomes e estados do registo de 11/11:
+
+- **Trabalho pendente de 17/08 (prioridade máxima do enunciado da tarefa) —
+  continua totalmente resolvido**: `mensagem_manha_13-24`, `mensagem_fimdia_21-30`
+  e `mensagem_sexta_13-18` — todos **APPROVED**, todos com `example.body_text`
+  confirmado no componente `BODY` (verificação programática: nenhum `APPROVED`
+  com `{{1}}` no corpo sem `example`).
+- `mensagem_fimdia_31`, `33`, `34`, `mensagem_manha_25-35` e
+  `mensagem_sexta_19-22` — continuam **APPROVED**, todos com `example`.
+- `mensagem_parceiro_manha_01-04` e `mensagem_parceiro_fimdia_01,03,04` (7
+  templates) — continuam **APPROVED**. Confirmei de novo por `grep` ao
+  código (`agent/motivacao.py` e `agent/meta_templates.py`) que nenhum nome
+  `parceiro_*` nem `urgente` é referenciado fora deste ficheiro de registo —
+  continuam fora do âmbito deste sistema automático.
+- `mensagem_sexta_urgente_01` — continua **REJECTED** (`INVALID_FORMAT`, sem
+  `example`, texto ainda com "dedicacao"/"Ate" por corrigir). Confirmei por
+  leitura de `listar_templates_aprovados()` em `agent/meta_templates.py` que
+  o filtro por `status == "APPROVED"` continua a excluí-lo da rotação
+  enquanto estiver `REJECTED` — não há impacto funcional hoje. Nota técnica
+  (não é um problema novo, só um detalhe confirmado nesta execução):
+  `proximo_indice_livre()` usa a regex `_(\d+)$` sobre o nome, por isso este
+  template também "conta" como índice `01` do prefixo `mensagem_sexta_` —
+  sem consequência prática, porque o maior índice real desse prefixo (22) já
+  é muito superior. Mantida a mesma cautela dos registos anteriores desde
+  17/08 — não corrigido nem apagado.
+- Total: 46 `mensagem_*` (manha/fimdia/sexta) `APPROVED` + 1 `REJECTED`
+  (`sexta_urgente_01`) + 7 `mensagem_parceiro_*` `APPROVED` = 54, mais 4
+  templates de outros fluxos, fora do âmbito desta manutenção
+  (`alerta_novo_pedido_simulador`, `site_novo_pedido`,
+  `tally_nova_submissao`, `hello_world`).
+
+Repositório: no início desta execução o `HEAD` local estava novamente
+destacado (`detached HEAD`), apontando para `25187f1` (registo de 11/11) —
+`git fetch origin main` confirmou que `origin/main` já estava no mesmo
+commit (sem commits novos de terceiros). Recriei a branch local `main` a
+apontar para `origin/main` com `git checkout -B main origin/main` antes de
+continuar, como em execuções anteriores com a mesma situação (08/11 a
+11/11). Este padrão repete-se diariamente; ver ponto pendente abaixo.
+
+### Trabalho realizado
+
+**Verificação de rotina (ponto 4 da tarefa):** li integralmente, uma por
+uma e com olhos frescos, o texto dos 53 templates `APPROVED` com prefixo
+`mensagem_` (incluindo os 7 `parceiro_*`), à procura de acentuação em
+falta, cedilhas e confusão "e"/"é". Não encontrei nenhum erro nesta
+execução.
+
+Confirmei também, por inspeção programática do componente `BODY` de cada
+template, que nenhum `APPROVED` com `{{1}}` no corpo está sem `example` —
+só o `sexta_urgente_01` (`REJECTED`, já conhecido) está nessa situação.
+
+Revi o histórico de `agent/meta_templates.py` e `agent/motivacao.py` (sem
+commits novos desde `fec6fe4`, de 13/10) — sem alterações a estes
+ficheiros. `PREFIXOS`, `POOL_RESERVA`, `DESCRICAO_TIPO` e `CONSULTORES`
+continuam consistentes com os templates ativos na Meta.
+
+Nenhum template foi criado, corrigido ou apagado nesta execução. Nenhuma
+alteração de código necessária. Estado inalterado desde 11/11, exceto a
+correção da branch local `main`.
+
+### Pendente para a próxima execução
+
+1. Continuar a rever a acentuação de todos os templates `APPROVED` a cada
+   execução, com olhos frescos (incluindo os `mensagem_parceiro_*`).
+2. Dúvida de conteúdo em `mensagem_sexta_19` ("Boa semana" como abertura de
+   mensagem de fecho de semana) continua por decidir — ver registos desde
+   20/09. Não é um erro de português, por isso continuo a não agir sem
+   confirmação de que vale a pena gastar um ciclo de revisão da Meta.
+3. `mensagem_sexta_urgente_01` continua por esclarecer (ver ponto 5 do
+   registo de 17/08 e nota técnica acima) — sem novidades hoje. Reitero a
+   sugestão do registo de 11/11: confirmar com o utilizador se pode ser
+   simplesmente apagado, já que é um template avulso fora do padrão
+   numérico da rotação normal.
+4. `mensagem_fimdia_32` e `mensagem_parceiro_fimdia_02` continuam em falta,
+   sem impacto funcional conhecido (ver registos de 17/09 e 14/10) — sem
+   ação necessária a menos que o padrão se repita ou afete algum fluxo.
+5. Os `mensagem_parceiro_*` continuam sem fluxo automático associado neste
+   repositório (ver ponto 5 do registo de 14/10) — a confirmar com o
+   utilizador se for relevante, sem ação própria.
+6. Nenhum trabalho pendente do bug do campo `example` nos templates da
+   rotação ativa — todos continuam a incluí-lo.
+7. A secção `## 04/11/2026` continua fora de ordem cronológica neste
+   ficheiro (ver nota no registo de 05/11) — informativo apenas.
+8. Este ficheiro de registo continua muito extenso (agora mais de 5900
+   linhas, ~90 execuções diárias sem alterações de fundo desde 17/08).
+   Reitero a sugestão de várias execuções anteriores: arquivar/resumir os
+   registos anteriores a 01/10 num ficheiro separado traria pouco risco e
+   melhoraria a legibilidade — mas continuo sem fazer essa alteração sem
+   confirmação explícita do utilizador.
+9. O `HEAD` local tem ficado destacado no início de várias execuções
+   seguidas (pelo menos 08/11 a 12/11), sempre corrigido manualmente com
+   `git checkout -B main origin/main`. Não encontrei qualquer commit
+   perdido ou divergência real de conteúdo (o `origin/main` está sempre
+   correto) — parece ser só a forma como o ambiente de execução é
+   inicializado em cada sessão a não deixar a referência local `main`
+   configurada, sem impacto no resultado. Sinalizo de novo para o caso de
+   o utilizador preferir investigar/ajustar a configuração do ambiente,
+   mas não é uma ação que este sistema automático deva tentar corrigir
+   por si.
