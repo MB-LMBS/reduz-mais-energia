@@ -6246,3 +6246,108 @@ correção da referência local de `main` (sem impacto real, ver acima).
    utilizador investigar a configuração do ambiente de execução, mas
    não é uma ação que este sistema automático deva tentar corrigir por
    si além do `git checkout -B main <HEAD>` + `git push` já aplicado.
+
+## 15/11/2026
+
+### Estado encontrado no início desta execução
+
+`META_ACCESS_TOKEN` e `META_WABA_ID` disponíveis no ambiente (verificados
+por presença, sem imprimir valores).
+
+`HEAD` local estava destacado no início desta execução, parado em
+`6cbbb98` (o commit do registo de 14/11). Fiz `git fetch origin main` e
+confirmei que esse commit já estava em `origin/main` — de novo, sem
+trabalho por publicar nem commit perdido. Corrigi com
+`git checkout -B main 6cbbb98`; como `origin/main` já tinha este commit,
+não foi necessário `git push` adicional. Branch `main` local sincronizada
+com `origin/main`.
+
+Listagem completa via GET `message_templates` (fields
+`name,status,rejected_reason,components,language`, `limit=250`) — 58
+templates no total (uma só página, sem `next` no `paging`), 54 deles
+`mensagem_*` — mesmo total e exatamente os mesmos nomes e estados do
+registo de 14/11:
+
+- **Trabalho pendente de 17/08 (prioridade máxima do enunciado da
+  tarefa) — continua totalmente resolvido**: `mensagem_manha_13-24`,
+  `mensagem_fimdia_21-30` e `mensagem_sexta_13-18` — todos **APPROVED**,
+  confirmados programaticamente com `example.body_text` presente no
+  componente `BODY` de cada um.
+- `mensagem_fimdia_31`, `33`, `34`, `mensagem_manha_25-35` e
+  `mensagem_sexta_19-22` — continuam **APPROVED**, todos com `example`.
+- `mensagem_parceiro_manha_01-04` e `mensagem_parceiro_fimdia_01,03,04`
+  (7 templates) — continuam **APPROVED**, fora do âmbito deste sistema
+  automático (sem referência a `parceiro_*` em `agent/motivacao.py` nem
+  `agent/meta_templates.py`).
+- `mensagem_sexta_urgente_01` — continua **REJECTED** (`INVALID_FORMAT`,
+  sem `example`, texto ainda com "dedicacao"/"Ate" por corrigir) — fora
+  da rotação (`listar_templates_aprovados()` filtra por `APPROVED`), sem
+  impacto funcional. Mantida a mesma cautela dos registos anteriores
+  desde 17/08 — não corrigido nem apagado, por ser um template avulso
+  fora do padrão numérico da rotação normal e de origem/uso incertos.
+- Confirmação programática: verifiquei todos os 58 templates e nenhum
+  `APPROVED` com `{{1}}` no corpo está sem `example` — só o
+  `sexta_urgente_01` (`REJECTED`, já conhecido) está nessa situação.
+- Total: 46 `mensagem_*` (manha/fimdia/sexta) `APPROVED` + 1 `REJECTED`
+  (`sexta_urgente_01`) + 7 `mensagem_parceiro_*` `APPROVED` = 54, mais 4
+  templates de outros fluxos, fora do âmbito desta manutenção
+  (`alerta_novo_pedido_simulador`, `site_novo_pedido`,
+  `tally_nova_submissao`, `hello_world`).
+
+### Trabalho realizado
+
+**Verificação de rotina (ponto 4 da tarefa):** li integralmente, uma por
+uma e com olhos frescos, o texto dos 53 templates `APPROVED` com prefixo
+`mensagem_` (incluindo os 7 `parceiro_*`), à procura de acentuação em
+falta, cedilhas e confusão "e"/"é". Não encontrei nenhum erro nesta
+execução.
+
+Revi o histórico de `agent/meta_templates.py` e `agent/motivacao.py`
+(sem commits novos desde `fec6fe4`, de 13/10) — sem alterações a estes
+ficheiros. `PREFIXOS`, `POOL_RESERVA`, `DESCRICAO_TIPO` e `CONSULTORES`
+continuam consistentes com os templates ativos na Meta.
+
+Nenhum template foi criado, corrigido ou apagado nesta execução. Nenhuma
+alteração de código necessária. Estado inalterado desde 14/11, exceto a
+correção da referência local de `main` (sem impacto real, ver acima).
+
+### Pendente para a próxima execução
+
+1. Continuar a rever a acentuação de todos os templates `APPROVED` a
+   cada execução, com olhos frescos (incluindo os `mensagem_parceiro_*`).
+2. Dúvida de conteúdo em `mensagem_sexta_19` ("Boa semana" como abertura
+   de mensagem de fecho de semana) continua por decidir — ver registos
+   desde 20/09. Não é um erro de português, por isso continuo a não agir
+   sem confirmação de que vale a pena gastar um ciclo de revisão da
+   Meta.
+3. `mensagem_sexta_urgente_01` continua por esclarecer (ver ponto 5 do
+   registo de 17/08) — sem novidades hoje. Reitero a sugestão dos
+   registos de 11/11 a 14/11: confirmar com o utilizador se pode ser
+   simplesmente apagado, já que é um template avulso fora do padrão
+   numérico da rotação normal.
+4. `mensagem_fimdia_32` e `mensagem_parceiro_fimdia_02` continuam em
+   falta, sem impacto funcional conhecido (ver registos de 17/09 e
+   14/10) — sem ação necessária a menos que o padrão se repita ou afete
+   algum fluxo.
+5. Os `mensagem_parceiro_*` continuam sem fluxo automático associado
+   neste repositório (ver ponto 5 do registo de 14/10) — a confirmar com
+   o utilizador se for relevante, sem ação própria.
+6. Nenhum trabalho pendente do bug do campo `example` nos templates da
+   rotação ativa — todos continuam a incluí-lo.
+7. A secção `## 04/11/2026` continua fora de ordem cronológica neste
+   ficheiro (ver nota no registo de 05/11) — informativo apenas.
+8. Este ficheiro de registo está muito extenso (mais de 6200 linhas,
+   ~93 execuções diárias sem alterações de fundo desde 17/08). Reitero a
+   sugestão de várias execuções anteriores: arquivar/resumir os registos
+   anteriores a 01/10 num ficheiro separado traria pouco risco e
+   melhoraria a legibilidade — mas continuo sem fazer essa alteração sem
+   confirmação explícita do utilizador.
+9. O padrão intermitente de `HEAD` local destacado no arranque da sessão
+   repetiu-se de novo hoje (ver acima) — já são 9 execuções consecutivas
+   (08/11 a 15/11) com o mesmo sintoma, sempre sem perda real de
+   trabalho. Dada a persistência, reitero com mais ênfase a sugestão dos
+   registos anteriores: vale a pena o utilizador investigar a
+   configuração do ambiente de execução (ex: como o checkout inicial da
+   sessão agendada define `HEAD`/`main`), já que não é uma ação que este
+   sistema automático deva tentar corrigir na raiz por si — só mitigar a
+   cada execução com `git fetch` + `git checkout -B main <HEAD>`.
