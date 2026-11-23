@@ -7178,3 +7178,131 @@ correção de `HEAD` destacado já descrita acima.
     trabalho), mas sugiro de novo ao utilizador atualizar o texto do
     agendamento para refletir o estado atual e evitar que esta nota se
     repita todos os dias.
+
+## 23/11/2026
+
+### Estado encontrado no início desta execução
+
+`META_ACCESS_TOKEN` e `META_WABA_ID` disponíveis no ambiente (verificados
+por presença, sem imprimir valores).
+
+`HEAD` local estava novamente destacado (`detached HEAD`), parado na
+revisão da execução de 22/11 (`3e8c9e2`), enquanto a branch `main`
+local estava atrasada em `origin/main` (ainda em `8ddc928`, de 17/11).
+Confirmei com `git fetch origin main` que `origin/main` estava, de
+facto, atualizado até `3e8c9e2` (22/11) — ou seja, os pushes das
+execuções de 18 a 22/11 foram bem-sucedidos; o que ficava atrasado era
+apenas a referência local `main`, nunca o remoto. Mesmo padrão
+intermitente já descrito em várias execuções anteriores, sem perda de
+trabalho. Mitigado como de costume com `git checkout -B main
+origin/main`.
+
+Listagem completa via GET `message_templates` (fields
+`name,status,rejected_reason,components,language`, `limit=250`) — 58
+templates no total (uma só página, sem `next` no `paging`), 54 deles
+`mensagem_*` — mesmo total e exatamente os mesmos nomes e estados do
+registo de 22/11, sem qualquer diferença:
+
+- **Trabalho pendente de 17/08 (citado como prioridade máxima no
+  enunciado de hoje) — continua totalmente resolvido**:
+  `mensagem_manha_13-24`, `mensagem_fimdia_21-30` e `mensagem_sexta_13-18`
+  — todos **APPROVED**, confirmados programaticamente com
+  `example.body_text` presente no componente `BODY` de cada um.
+- `mensagem_fimdia_31`, `33`, `34`, `mensagem_manha_25-35` e
+  `mensagem_sexta_19-22` — continuam **APPROVED**, todos com `example`.
+- `mensagem_parceiro_manha_01-04` e `mensagem_parceiro_fimdia_01,03,04`
+  (7 templates) — continuam **APPROVED**, fora do âmbito deste sistema
+  automático (sem referência a `parceiro_*` em `agent/motivacao.py` nem
+  `agent/meta_templates.py`).
+- `mensagem_sexta_urgente_01` — continua **REJECTED** (`INVALID_FORMAT`,
+  sem `example`, texto ainda com "dedicacao"/"Ate" por corrigir) — fora
+  da rotação (`listar_templates_aprovados()` filtra por `APPROVED`), sem
+  impacto funcional. Mantida a mesma cautela desde 17/08 — não corrigido
+  nem apagado.
+- Confirmação programática: verifiquei todos os 58 templates e nenhum
+  `APPROVED` com `{{1}}` no corpo está sem `example` — só o
+  `sexta_urgente_01` (`REJECTED`, já conhecido) está nessa situação.
+- Total: 46 `mensagem_*` (manha/fimdia/sexta) `APPROVED` + 1 `REJECTED`
+  (`sexta_urgente_01`) + 7 `mensagem_parceiro_*` `APPROVED` = 54, mais 4
+  templates de outros fluxos, fora do âmbito desta manutenção.
+
+### Trabalho realizado
+
+**Verificação de rotina (ponto 4 da tarefa):** li integralmente, uma por
+uma e com olhos frescos, o texto dos 53 templates `APPROVED` com prefixo
+`mensagem_` (incluindo os 7 `parceiro_*`), à procura de acentuação em
+falta, cedilhas e confusão "e"/"é". Não encontrei nenhum erro de
+acentuação nesta execução.
+
+Revi de novo as duas dúvidas de conteúdo já registadas — `mensagem_sexta_22`
+("cheia", no feminino) e `mensagem_sexta_19` ("Boa semana" como abertura
+de mensagem de fecho de semana) — continuam válidas, não são erros de
+português, mantenho sem ação própria à espera de confirmação do
+utilizador.
+
+Revi o histórico de `agent/meta_templates.py` e `agent/motivacao.py`
+(sem commits novos desde `fec6fe4`, de 13/10) — sem alterações a estes
+ficheiros. `PREFIXOS`, `POOL_RESERVA`, `DESCRICAO_TIPO` e `CONSULTORES`
+continuam consistentes com os templates ativos na Meta. Confirmei
+também que `CONSULTORES` continua com 2 pessoas (Luis Sequeira, Catarina
+Sequeira) — nota já registada desde 20/10, mudança deliberada pedida
+pelo utilizador (commits `a4763e9` e `fec6fe4`), sem ação própria. O
+enunciado da tarefa agendada refere "4 pessoas", o que está
+desatualizado desde essa mudança — mesma categoria da nota sobre o
+trabalho de 17/08, ver ponto 11 abaixo.
+
+Nenhum template foi criado, corrigido ou apagado nesta execução. Nenhuma
+alteração de código necessária. Estado inalterado desde 22/11, exceto a
+correção de `HEAD` destacado já descrita acima.
+
+### Pendente para a próxima execução
+
+1. Continuar a rever a acentuação de todos os templates `APPROVED` a
+   cada execução, com olhos frescos (incluindo os `mensagem_parceiro_*`).
+2. `mensagem_sexta_22` usa "cheia" (feminino) num template que serve
+   destinatários de ambos os géneros (ver registo de 16/11) — não é erro
+   de acentuação, por isso continuo sem corrigir sem confirmação do
+   utilizador sobre se vale a pena substituir por fraseio neutro.
+3. Dúvida de conteúdo em `mensagem_sexta_19` ("Boa semana" como abertura
+   de mensagem de fecho de semana) continua por decidir — ver registos
+   desde 20/09. Não é um erro de português, por isso continuo a não agir
+   sem confirmação de que vale a pena gastar um ciclo de revisão da
+   Meta.
+4. `mensagem_sexta_urgente_01` continua por esclarecer (ver ponto 5 do
+   registo de 17/08) — sem novidades hoje. Reitero a sugestão dos
+   registos anteriores: confirmar com o utilizador se pode ser
+   simplesmente apagado, já que é um template avulso fora do padrão
+   numérico da rotação normal.
+5. `mensagem_fimdia_32` e `mensagem_parceiro_fimdia_02` continuam em
+   falta, sem impacto funcional conhecido (ver registos de 17/09 e
+   14/10) — sem ação necessária a menos que o padrão se repita ou afete
+   algum fluxo.
+6. Os `mensagem_parceiro_*` continuam sem fluxo automático associado
+   neste repositório (ver ponto 5 do registo de 14/10) — a confirmar com
+   o utilizador se for relevante, sem ação própria.
+7. Nenhum trabalho pendente do bug do campo `example` nos templates da
+   rotação ativa — todos continuam a incluí-lo.
+8. A secção `## 04/11/2026` continua fora de ordem cronológica neste
+   ficheiro (ver nota no registo de 05/11) — informativo apenas.
+9. Este ficheiro de registo está muito extenso (mais de 7180 linhas,
+   cerca de 99 execuções diárias sem alterações de fundo desde 17/08).
+   Reitero a sugestão de várias execuções anteriores: arquivar/resumir
+   os registos anteriores a 01/10 num ficheiro separado traria pouco
+   risco e melhoraria a legibilidade — mas continuo sem fazer essa
+   alteração sem confirmação explícita do utilizador.
+10. O padrão intermitente de `HEAD` local destacado repetiu-se hoje
+    outra vez (confirmado hoje que nunca houve perda de trabalho — o
+    remoto esteve sempre atualizado). Mitigado sem alterar a causa raiz.
+    Reitero a sugestão: se o padrão continuar a aparecer de forma
+    intermitente, vale a pena o utilizador investigar a configuração do
+    ambiente de execução agendada.
+11. O prompt agendado que dispara esta tarefa diariamente ainda
+    descreve como pendente e de "prioridade máxima" o trabalho de 17/08
+    (já resolvido e confirmado há cerca de 101 execuções consecutivas) e
+    refere uma equipa de "4 pessoas" em `CONSULTORES`, quando esta lista
+    tem apenas 2 pessoas desde 13/10 por pedido explícito do utilizador.
+    Nenhuma destas desatualizações causa ação indevida (o ponto 1 da
+    própria tarefa pede para verificar o histórico antes de repetir
+    trabalho), mas sugiro de novo ao utilizador atualizar o texto do
+    agendamento para refletir o estado atual e evitar que esta nota se
+    repita todos os dias.
