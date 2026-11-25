@@ -7425,3 +7425,43 @@ alteração de código necessária. Estado inalterado desde 23/11.
     trabalho), mas sugiro de novo ao utilizador atualizar o texto do
     agendamento para refletir o estado atual e evitar que esta nota se
     repita todos os dias.
+
+## 25/11/2026
+
+`META_ACCESS_TOKEN` e `META_WABA_ID` disponíveis no ambiente (verificados
+por presença, sem imprimir valores).
+
+**Nota de git:** no início desta execução o `HEAD` estava destacado em
+`6784c98` (commit de 24/11) e o `main` local estava uma posição atrás.
+`git push origin main` confirmou "Everything up-to-date" — ou seja,
+`origin/main` já tinha `6784c98`; era só o `main` local/`HEAD` desta
+sessão que estava desatualizado/destacado. Fiz `checkout main` +
+fast-forward para `6784c98`, sem necessidade de novo push. Sem perda de
+trabalho.
+
+Listagem completa via GET `message_templates` (mesmos `fields` e
+`limit=250` do costume) — 58 templates, 54 `mensagem_*`, estado
+**idêntico** aos registos de 22–24/11, sem qualquer diferença:
+53 `mensagem_*` `APPROVED` (incluindo os 7 `mensagem_parceiro_*`, fora
+do âmbito deste sistema) + 1 `REJECTED` (`mensagem_sexta_urgente_01`,
+`INVALID_FORMAT`, sem `example`, texto ainda com "dedicacao"/"Ate" por
+corrigir — fora da rotação, mantido sem ação própria desde 17/08 à
+espera de confirmação do utilizador sobre se pode ser apagado).
+Trabalho pendente de 17/08 (`manha_13-24`, `fimdia_21-30`, `sexta_13-18`)
+continua **APPROVED** com `example.body_text` confirmado
+programaticamente. Confirmei também que nenhum `APPROVED` com `{{1}}`
+no corpo está sem `example`.
+
+Verificação de rotina (ponto 4): reli o texto dos 53 templates
+`APPROVED` à procura de acentuação em falta — nenhum erro novo
+encontrado. As duas dúvidas de conteúdo já registadas
+(`mensagem_sexta_22` "cheia" no feminino; `mensagem_sexta_19` "Boa
+semana" como abertura de mensagem de sexta) continuam sem alteração,
+por não serem erros de português, à espera de confirmação do
+utilizador. Sem alterações a `agent/meta_templates.py` nem
+`agent/motivacao.py` desde `fec6fe4` (13/10).
+
+Nenhum template criado, corrigido ou apagado hoje. Pendentes
+inalterados face ao registo de 24/11 (ver pontos 1–9 acima) — mantenho-
+os sem repetir aqui para não alongar ainda mais este ficheiro (ver
+ponto 9).
