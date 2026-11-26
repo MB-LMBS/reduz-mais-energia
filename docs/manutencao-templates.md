@@ -7465,3 +7465,42 @@ Nenhum template criado, corrigido ou apagado hoje. Pendentes
 inalterados face ao registo de 24/11 (ver pontos 1–9 acima) — mantenho-
 os sem repetir aqui para não alongar ainda mais este ficheiro (ver
 ponto 9).
+
+## 26/11/2026
+
+`META_ACCESS_TOKEN` e `META_WABA_ID` disponíveis no ambiente (verificados
+por presença, sem imprimir valores).
+
+**Nota de git:** tal como em 25/11, esta sessão (ambiente novo) iniciou
+com o `HEAD` destacado duas posições à frente do `main` local. `git
+fetch origin main` confirmou que `origin/main` já tinha os commits de
+24/11 e 25/11 — fiz `checkout main` + fast-forward, sem perda de
+trabalho e sem necessidade de novo push.
+
+Listagem completa via GET `message_templates` (mesmos `fields` e
+`limit=250` do costume) — 58 templates, 54 `mensagem_*`, estado
+**idêntico** aos registos de 22–25/11: 53 `mensagem_*` `APPROVED`
+(incluindo os 7 `mensagem_parceiro_*`, fora do âmbito deste sistema) +
+1 `REJECTED` (`mensagem_sexta_urgente_01`, `INVALID_FORMAT`, sem
+`example`, texto ainda com "dedicacao"/"Ate" por corrigir — fora da
+rotação, mantido sem ação própria desde 17/08 à espera de confirmação
+do utilizador sobre se pode ser apagado). Confirmei programaticamente
+que o lote pendente de 17/08 (`manha_13-24`, `fimdia_21-30`,
+`sexta_13-18`) continua todo **APPROVED** com `example.body_text`, e
+que nenhum `APPROVED` com `{{1}}` no corpo está sem `example`.
+
+Verificação de rotina (ponto 4): reli o texto dos 53 templates
+`APPROVED`, uma por uma e com olhos frescos, à procura de acentuação em
+falta, cedilhas e confusão "e"/"é" — nenhum erro novo encontrado. As
+duas dúvidas de conteúdo já registadas (`mensagem_sexta_22` "cheia" no
+feminino; `mensagem_sexta_19` "Boa semana" como abertura de mensagem de
+fecho de semana) continuam sem alteração, por não serem erros de
+português, à espera de confirmação do utilizador. Revi
+`agent/meta_templates.py` e `agent/motivacao.py` — sem alterações desde
+`fec6fe4` (13/10), código consistente com o comportamento observado na
+Meta.
+
+Nenhum template criado, corrigido ou apagado hoje. Nenhuma alteração de
+código necessária. Pendentes inalterados face ao registo de 25/11
+(pontos 1–10 do registo de 24/11) — mantenho sem repetir aqui para não
+alongar ainda mais este ficheiro.
