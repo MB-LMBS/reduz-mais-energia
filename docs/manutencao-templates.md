@@ -7548,3 +7548,70 @@ agendado continua a descrever o trabalho de 17/08 como pendente de
 "prioridade máxima" e a referir uma equipa de "4 pessoas", ambos
 desatualizados há mais de 100 execuções — sugiro ao utilizador
 atualizar o texto do agendamento.
+
+## 28/11/2026
+
+`META_ACCESS_TOKEN` e `META_WABA_ID` disponíveis no ambiente (verificados
+por presença, sem imprimir valores).
+
+**Nota de git:** tal como em 25–27/11, esta sessão (ambiente novo)
+iniciou com o `HEAD` destacado em `06b200e` (commit de 27/11) e o
+`main` local uma posição atrás. Um `git fetch origin main` isolado
+devolveu por engano o `origin/main` ainda em `0a8db09` (23/11); um
+`git fetch origin` completo (sem restringir ao ramo) confirmou que
+`origin/main` estava de facto em `06b200e`, igual ao `HEAD`. Fiz
+`checkout main` + fast-forward, sem perda de trabalho e sem necessidade
+de push antes desta execução.
+
+Listagem completa via GET `message_templates` (mesmos `fields` e
+`limit=250` do costume, uma só página) — **62 templates no total, 58
+`mensagem_*` (+4 face a 22–27/11)**. A diferença são 4 templates novos,
+**`mensagem_sexta_23` a `mensagem_sexta_26`**, todos **APPROVED**,
+`language=pt_PT`, com `example.body_text` presente (`["Luis"]`) no
+componente `BODY`. Não fui eu a criá-los — confirmei em
+`agent/motivacao.py` (`_gerar_e_submeter_novo_lote`) que é o próprio
+sistema em produção que gera e submete um novo lote de 4 mensagens à
+Meta, sozinho, quando o ciclo de rotação de um tipo (aqui o tipo
+`sexta`) dá a volta completa (`novo_ciclo == 0`); o lote anterior de
+`sexta` ia de 13 a 22 (10 templates), por isso o ciclo completou-se e
+disparou este novo lote — comportamento esperado, não um bug. Li as 4
+mensagens (ver texto completo nos próprios templates) e confirmo: tom
+caloroso de fecho de semana, sem menção a resultados ou comparações,
+`{{1}}` sempre rodeado de texto fixo, acentuação portuguesa correta,
+dentro do intervalo 100–280 caracteres — nenhum problema encontrado.
+
+Resto do estado, **idêntico** aos registos de 22–27/11: trabalho
+pendente de 17/08 (`manha_13-24`, `fimdia_21-30`, `sexta_13-18`)
+continua **APPROVED** com `example.body_text` confirmado
+programaticamente. `mensagem_sexta_urgente_01` continua **REJECTED**
+(`INVALID_FORMAT`, sem `example`, texto ainda com
+"dedicacao"/"Ate" por corrigir) — fora da rotação, mantida sem ação
+própria desde 17/08, à espera de confirmação do utilizador sobre se
+pode ser apagada. Confirmação programática: nenhum template `APPROVED`
+com `{{1}}` no corpo está sem `example` — só o `sexta_urgente_01`
+(`REJECTED`, já conhecido) está nessa situação.
+
+**Verificação de rotina (ponto 4):** reli o texto de todos os 57
+templates `mensagem_*` `APPROVED` (incluindo os 4 novos `sexta_23-26` e
+os 7 `mensagem_parceiro_*`), uma por uma e com olhos frescos, à procura
+de acentuação em falta, cedilhas e confusão "e"/"é" — nenhum erro novo
+encontrado. As duas dúvidas de conteúdo já registadas
+(`mensagem_sexta_22` "cheia" no feminino; `mensagem_sexta_19` "Boa
+semana" como abertura de mensagem de fecho de semana) continuam sem
+alteração, por não serem erros de português, à espera de confirmação
+do utilizador. Revi `agent/meta_templates.py` e `agent/motivacao.py` —
+sem alterações desde `fec6fe4` (13/10); `CONSULTORES` continua com as
+2 pessoas (Luis Sequeira, Catarina Sequeira) definidas desde 13/10.
+
+Nenhum template criado, corrigido ou apagado por mim hoje (os 4 novos
+`sexta_23-26` foram gerados e submetidos autonomamente pela própria
+aplicação em produção, como descrito acima). Nenhuma alteração de
+código necessária. Pendentes inalterados face ao registo de 27/11
+(pontos 1–10 do registo de 24/11) — mantenho sem repetir aqui para não
+alongar ainda mais este ficheiro (ver ponto 9). Reitero apenas o ponto
+10: o prompt agendado continua a descrever o trabalho de 17/08 como
+pendente de "prioridade máxima" e a referir uma equipa de "4 pessoas",
+ambos desatualizados há mais de 100 execuções — sugiro novamente ao
+utilizador atualizar o texto do agendamento para refletir o estado
+atual (e, já agora, para referir a reposição automática de lotes de
+templates como comportamento normal, não como incidente).
